@@ -116,7 +116,9 @@ def download_study(modality, task, data_dir, overrides=None):
     cfg = _task_data_config(modality, task, data_dir, overrides)
     study = dict(cfg["study"]["source"])
     study["path"] = Path(study["path"]) / study["name"]
-    ns.Study(**study).download()
+    # The first download leaves a marker that skips any later one, even for
+    # new subjects; overwrite ignores it, and eegdash fetches missing files.
+    ns.Study(**study).download(overwrite=True)
 
 
 def require_prepared(modality, task, data_dir):
