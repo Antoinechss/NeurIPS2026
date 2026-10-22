@@ -1,16 +1,16 @@
 version: 2
-title: "Template competition: dummy classification"
+title: "EMG2Pose: hand pose from wrist EMG"
 description: >
-  Template for a benchopt-powered Codabench competition: a binary
-  classification task scored by accuracy. Submissions are code (a benchopt
-  solver) that trains on the platform. The public leaderboard column scores
-  a public test set; the final ranking uses a hidden private test set.
+  Predict the 20 joint angles of the hand over time from 16-channel wrist
+  surface EMG. Submissions are code (a benchopt solver) that trains on the
+  platform, on a GPU. The public leaderboard column scores held-out movement
+  stages; the final ranking uses a hidden private cohort of new users.
 image: logo.png
 registration_auto_approve: False
 
 # The image submissions run in: built from tools/Dockerfile, it carries the
 # requirements.txt stack and the benchmark (/compet/benchmark).
-docker_image: <dockerhub-user>/<competition>:v1
+docker_image: tommoral/emg2pose-compet:v1
 
 # Only the leaderboard metrics are exposed.
 enable_detailed_results: False
@@ -26,7 +26,7 @@ pages:
 
 tasks:
   - index: 0
-    name: Classification
+    name: EMG to pose
     description: >
       The ingestion program runs the benchopt benchmark on your submission
       (training on the platform); scoring parses the results.
@@ -48,9 +48,9 @@ phases:
     description: >
       Build, train and submit your model. The public column scores the public
       test set; the final ranking uses the hidden private test set.
-    start: 2026-11-02 00:00:00
+    start: 2026-11-03 00:00:00
     end: 2027-01-31 23:59:59
-    execution_time_limit: 600
+    execution_time_limit: 3600
     max_submissions_per_day: 5
     # results.parquet and scores.json carry the hidden private metrics.
     hide_prediction_output: True
@@ -64,16 +64,34 @@ leaderboards:
   - title: Results
     key: main
     columns:
-      - title: Accuracy (public)
-        key: accuracy
+      - title: Angular MAE, deg (public)
+        key: angular_mae
         index: 0
-        sorting: desc
-      - title: Accuracy (private)
-        key: accuracy_private
+        sorting: asc
+      - title: Per-subject MAE std, deg (public)
+        key: angular_mae_subject_std
         index: 1
+        sorting: asc
+      - title: R2 (public)
+        key: r2
+        index: 2
+        sorting: desc
+      - title: Angular MAE, deg (private)
+        key: angular_mae_private
+        index: 3
+        sorting: asc
+        hidden: True
+      - title: Per-subject MAE std, deg (private)
+        key: angular_mae_subject_std_private
+        index: 4
+        sorting: asc
+        hidden: True
+      - title: R2 (private)
+        key: r2_private
+        index: 5
         sorting: desc
         hidden: True
       - title: Duration (s)
         key: duration
-        index: 2
+        index: 6
         sorting: asc

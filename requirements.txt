@@ -7,3 +7,19 @@ benchopt>=1.10
 numpy
 pandas
 scikit-learn
+# torch comes from the PyTorch wheel index in tools/Dockerfile (CUDA build);
+# listed here for local installs / the dependency contract.
+torch
+braindecode
+# Data stack of the real dataset (Simulated needs none of it). The four
+# neuroai packages release in lockstep: pinned exactly for a reproducible
+# image.
+neuralset==0.4.0
+neuralfetch==0.4.0
+neuraltrain==0.4.0
+neuralbench==0.4.0
+exca==0.5.29
+mne
+# The EMG2Pose study downloads from NEMAR through these.
+nemar-py>=0.3.1
+eegdash

@@ -14,8 +14,9 @@ course. By participating you agree to the following.
    runs or the evaluation infrastructure.
 4. **Reproducibility.** The organizers may re-run any submission to verify its
    leaderboard score. A submission that cannot be reproduced may be removed.
-5. **Data usage.** The data are provided for use within this competition
-   only.
+5. **Data usage.** Train only on the data the platform provides. Using
+   other EMG data, including the rest of the public emg2pose corpus, is not
+   allowed.
 
 The organizers may adjust these rules and will announce any change on the
 competition pages.

@@ -3,7 +3,7 @@
 Mirrors the platform layout: the phase directory (run config) is
 mounted as ``/app/input_data``, a submission as ``/app/ingested_program``, and
 the prepared data as ``/app/data`` (read-only). Prepare the data first with
-``benchopt prepare benchmark -d Real`` (writes ``benchmark/data``).
+``benchopt prepare benchmark -d EMG2Pose`` (writes ``benchmark/data``).
 
 Usage
 -----
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     client = docker.from_env()
-    image = "codabench-compet:dev"
+    image = "tommoral/emg2pose-compet:dev"
     print(f"Building {image}...")
     client.images.build(path=str(REPO), dockerfile="tools/Dockerfile",
                         tag=image)
