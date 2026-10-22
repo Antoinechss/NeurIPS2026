@@ -26,10 +26,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # torch with an explicit CUDA channel: cu126 runs on any R525+ driver (cu128+
 # for Blackwell GPUs, cpu for CI). Installed first so requirements.txt keeps
-# this build.
+# this build. torchvision and torchaudio come from the same channel: the
+# neuro stack pulls them, and PyPI builds do not match a channel torch.
 ARG TORCH_CHANNEL=cu126
 RUN pip install -U pip && pip install --no-cache-dir \
-    torch --index-url https://download.pytorch.org/whl/${TORCH_CHANNEL}
+    torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/${TORCH_CHANNEL}
 
 # All Python dependencies a submission may import: nothing is installed at
 # submission time.
