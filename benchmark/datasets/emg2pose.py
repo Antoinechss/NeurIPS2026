@@ -39,6 +39,9 @@ TEST_SUBJECTS = [
     '02', '03', '05', '08', '20', '28', '44', '49', '55', '56', '84', '89',
     '102', '111', '134', '137', '141', '180', '183', '193',
 ]
+# neuralbench builds a val loader and fails on an empty split: keep the
+# smallest validation user.
+VAL_SUBJECTS = ['166']
 TRAIN_SUBJECTS = [
     '01', '04', '06', '07', '09', '10', '11', '12', '13', '14', '15', '16',
     '17', '18', '19', '21', '22', '23', '24', '25', '26', '27', '30', '31',
@@ -91,7 +94,8 @@ class Dataset(BaseDataset):
         return path
 
     def _query(self):
-        subjects = TEST_SUBJECTS + TRAIN_SUBJECTS[:self.n_train_subjects]
+        subjects = (TEST_SUBJECTS + VAL_SUBJECTS
+                    + TRAIN_SUBJECTS[:self.n_train_subjects])
         labels = [f"Salter2024Emg2pose/{s}" for s in subjects]
         return {"study.source.query": f"subject in {labels!r}"}
 
