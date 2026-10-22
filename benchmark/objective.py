@@ -1,24 +1,32 @@
-"""Objective: what a submission is evaluated on, and how.
+"""Objective for the EMG-to-pose competition.
 
-This template's task is a binary classification scored by accuracy. The
-solver gets the training data, trains its model (on the platform), and the
-objective scores the trained model on each held-out subset: ``public``
-(shown live on the leaderboard) and ``private`` (hidden, final ranking).
-Metrics are emitted per subset as ``objective_<metric>_<subset>``; the phase
+Regress hand joint-angle trajectories from wrist surface EMG. The solver gets
+the training loader and trains its model on the platform; the objective then
+feeds it torch batches ``(B, C, T)`` of 16-channel EMG windows and expects
+``predict(X) -> (B, n_joints, T')`` in **radians** (a coarser time axis is
+nearest-resampled to the target's ``T``).
+
+Ranking metric: **mean angular MAE** in degrees, over joints and time.
+Reported alongside: the mean and standard deviation of the per-subject MAE,
+the RMSE (degrees) and the R2 averaged over joints. Each held-out subset is
+scored on its own: ``public`` (shown live) and ``private`` (hidden, final
+ranking). Metrics are emitted as ``objective_<metric>_<subset>``; the phase
 config maps them to leaderboard keys.
-
-Adapt: ``set_data`` / ``get_objective`` to your data, ``evaluate_result`` to
-your metric.
 """
 
+import numpy as np
 from benchopt import BaseObjective
-from sklearn.metrics import accuracy_score
+
+from benchmark_utils.data import resample_labels, subject_ids, to_numpy
+from benchmark_utils.metrics import SequenceRegressionScores
+
+DEG = 180.0 / np.pi
 
 
 class Objective(BaseObjective):
 
-    name = "classification-accuracy"
-    url = "https://github.com/x-datascience-datacamp/template_codabench"
+    name = "EMG-pose"
+    url = "https://github.com/x-datascience-datacamp/codabench_emg2pose"
 
     requirements = ["scikit-learn"]
 
@@ -27,23 +35,40 @@ class Objective(BaseObjective):
     # Each solver trains once (no convergence curve).
     sampling_strategy = "run_once"
 
-    def set_data(self, X_train, y_train, test_sets):
-        # test_sets: ``name -> (X, y)``; the test labels stay here so the
+    def set_data(self, train_loader, test_sets, n_joints, **meta):
+        # test_sets: ``name -> loader``; the test labels stay here so the
         # objective owns evaluation.
-        self.X_train = X_train
-        self.y_train = y_train
+        self.train_loader = train_loader
         self.test_sets = test_sets
+        self.n_joints = n_joints
+        self.meta = meta  # n_chans, n_times, sfreq, device
 
     def get_objective(self):
-        return dict(X_train=self.X_train, y_train=self.y_train)
+        return dict(train_loader=self.train_loader, n_joints=self.n_joints,
+                    **self.meta)
 
     def evaluate_result(self, model):
-        return {
-            f"accuracy_{name}": float(accuracy_score(y, model.predict(X)))
-            for name, (X, y) in self.test_sets.items()
-        }
+        results = {}
+        for name, loader in self.test_sets.items():
+            scores = SequenceRegressionScores()
+            for X, y, info in loader:
+                pred = to_numpy(model.predict(X))     # (B, J, T')
+                y = to_numpy(y)                       # (B, J, T)
+                pred = resample_labels(pred, y.shape[-1])
+                scores.update(pred, y, subject_ids(info, len(y)))
+            scores = scores.compute()
+            results.update({
+                f"angular_mae_{name}": scores["mae"] * DEG,
+                f"angular_mae_subject_mean_{name}":
+                    scores["mae_group_mean"] * DEG,
+                f"angular_mae_subject_std_{name}":
+                    scores["mae_group_std"] * DEG,
+                f"angular_rmse_{name}": scores["rmse"] * DEG,
+                f"r2_{name}": scores["r2"],
+            })
+        return results
 
     def get_one_result(self):
-        # A trained trivial model, to validate the metric in ``benchopt test``.
-        from sklearn.dummy import DummyClassifier
-        return dict(model=DummyClassifier().fit(self.X_train, self.y_train))
+        # The mean-pose floor, to validate the metric in ``benchopt test``.
+        from benchmark_utils.baselines import ConstantPose
+        return dict(model=ConstantPose(self.n_joints))

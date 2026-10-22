@@ -1,11 +1,15 @@
 # Phase config — a native `benchopt run --config` file plus one competition
 # key (`scoring`) read by the scoring program and stripped by ingestion.
 dataset:
-  - Real
+  - EMG2Pose
 seed: 42
 no_timeout: true
 scoring:
   # leaderboard key (competition.yaml) -> results column (objective output)
   columns:
-    accuracy: objective_accuracy_public
-    accuracy_private: objective_accuracy_private
+    angular_mae: objective_angular_mae_public
+    angular_mae_subject_std: objective_angular_mae_subject_std_public
+    r2: objective_r2_public
+    angular_mae_private: objective_angular_mae_private
+    angular_mae_subject_std_private: objective_angular_mae_subject_std_private
+    r2_private: objective_r2_private

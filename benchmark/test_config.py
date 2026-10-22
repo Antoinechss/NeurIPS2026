@@ -2,9 +2,9 @@
 
 import pytest
 
-# The real dataset needs prepared data files, which CI does not carry;
-# ``Simulated`` covers the no-data smoke test.
-REAL_DATASETS = ("real",)
+# The real dataset needs the neuro stack and a large download, which CI does
+# not carry; ``Simulated`` covers the no-data smoke test.
+REAL_DATASETS = ("emg2pose",)
 
 
 def check_test_dataset_install(dataset_class):
