@@ -98,8 +98,11 @@ def _task_data_config(modality, task, data_dir, overrides):
     return cfg
 
 
-def download_study(modality, task, data_dir):
+def download_study(modality, task, data_dir, overrides=None):
     """One-time download of the task's study data (``Dataset.prepare``).
+
+    A ``study.source.query`` naming subjects in ``overrides`` restricts the
+    download to them.
 
     Skipped when ``data_dir`` is not writable: on the worker the staged data
     is mounted read-only, and ``Study.download()`` ends with a ``chmod``.
@@ -110,7 +113,7 @@ def download_study(modality, task, data_dir):
     import neuralset as ns
     _quiet_neuro_logs()
 
-    cfg = _task_data_config(modality, task, data_dir, None)
+    cfg = _task_data_config(modality, task, data_dir, overrides)
     study = dict(cfg["study"]["source"])
     study["path"] = Path(study["path"]) / study["name"]
     ns.Study(**study).download()
