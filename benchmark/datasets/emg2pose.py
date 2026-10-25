@@ -125,6 +125,14 @@ class Dataset(BaseDataset):
         require_prepared("emg", "pose", self._data_dir())
         device = get_device()
         loaders, meta = self._load(device=device)
+        # The extraction cache ignores scale_factor: a stale entry can serve
+        # targets at the EMG input's microvolt scale instead of radians.
+        y = np.asarray(next(iter(loaders["test"]))[1].cpu(), dtype=float)
+        if np.nanmax(np.abs(y)) > 2 * np.pi:
+            raise RuntimeError(
+                f"Joint angles up to {np.nanmax(np.abs(y)):.3g}, not radians: "
+                f"delete {self._data_dir() / 'cache'} and prepare again."
+            )
         test_sets = {"public": loaders["test"]}
         sealed = get_data_path("emg2pose_sealed")
         if (sealed / "X.npy").exists():
