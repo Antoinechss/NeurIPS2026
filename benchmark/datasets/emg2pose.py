@@ -34,22 +34,23 @@ from neuralfetch.studies.salter2024emg2pose import Salter2024Emg2pose
 from benchmark_utils.data import get_device, make_loader
 from benchmark_utils.nb_task import download_study, load_task, require_prepared
 
-_load_raw = Salter2024Emg2pose._load_raw
+_nemar_load_raw = Salter2024Emg2pose._load_raw
 
 
-def _load_raw_radians(self, timeline):
+# Named like the method it replaces: neuralset stores loaders by name.
+def _load_raw(self, timeline):
     """Read a recording with its joint angles in radians.
 
     NEMAR nm000281 >= 1.0.4 relabelled most BDF joint channels from uV to rad
     without rescaling the samples, so MNE reads them as radians x 1e6.
     """
-    raw = _load_raw(self, timeline)
+    raw = _nemar_load_raw(self, timeline)
     if np.nanmax(np.abs(raw.get_data(picks="misc"))) > 1e3:
         raw.apply_function(lambda data: data * 1e-6, picks="misc")
     return raw
 
 
-Salter2024Emg2pose._load_raw = _load_raw_radians
+Salter2024Emg2pose._load_raw = _load_raw
 
 # BIDS labels from the corpus metadata (emg2pose_metadata.csv): the users of
 # the ``user_stage`` test rows, and the users with training recordings.
@@ -143,7 +144,7 @@ class Dataset(BaseDataset):
         require_prepared("emg", "pose", self._data_dir())
         device = get_device()
         loaders, meta = self._load(device=device)
-        # A cache built without _load_raw_radians serves radians x 1e6.
+        # A cache built without the _load_raw fix serves radians x 1e6.
         y = np.asarray(next(iter(loaders["test"]))[1].cpu(), dtype=float)
         if np.nanmax(np.abs(y)) > 2 * np.pi:
             raise RuntimeError(
