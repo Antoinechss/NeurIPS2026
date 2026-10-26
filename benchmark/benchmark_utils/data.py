@@ -1,8 +1,9 @@
-"""Data utilities: lazy loaders of ``(X, y, info)`` batches.
+"""Data utilities: lazy datasets and loaders of ``(X, y, info)`` windows.
 
-The benchmark passes **PyTorch dataloaders** between components, not
-materialized arrays, because the EMG recordings are large. Every loader
-yields ``(X, y, info)`` batches:
+The benchmark passes **PyTorch datasets and dataloaders** between
+components, not materialized arrays, because the EMG recordings are large.
+The training set reaches the solver as a dataset, batched by
+:func:`make_loader`. Every loader yields ``(X, y, info)`` batches:
 
 - ``X``    : float32 tensor ``(B, C, T)``, windows of ``C`` EMG channels.
 - ``y``    : float32 tensor ``(B, n_joints, T)``, joint angles in radians.
@@ -18,7 +19,7 @@ import os
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset, default_collate
+from torch.utils.data import DataLoader, Dataset
 
 
 def to_numpy(x):
@@ -92,18 +93,36 @@ class ArrayWindows(Dataset):
         return X, y, {"subject_id": int(self.subject_id[i])}
 
 
-def _move_collate(device):
-    """Default collate, then move ``X`` and ``y`` onto ``device``."""
-    def collate(batch):
-        X, y, info = default_collate(batch)
-        return X.to(device), y.to(device), info
-    return collate
+class DeviceLoader:
+    """Move batches to ``device`` in the main process.
+
+    Worker processes (``num_workers > 0``) cannot move tensors to CUDA, so
+    the wrapped loader collates CPU tensors and this wrapper moves them.
+    Attribute access delegates to the wrapped loader.
+    """
+
+    def __init__(self, loader, device):
+        self.loader = loader
+        self.device = device
+
+    def __iter__(self):
+        for X, y, info in self.loader:
+            yield X.to(self.device, non_blocking=True), y.to(
+                self.device, non_blocking=True), info
+
+    def __len__(self):
+        return len(self.loader)
+
+    def __getattr__(self, name):
+        return getattr(self.loader, name)
 
 
-def make_loader(X, y, subject_id=None, batch_size=32, shuffle=False,
-                device="cpu"):
-    """Wrap arrays in ``ArrayWindows`` and a ``DataLoader`` on ``device``."""
-    return DataLoader(
-        ArrayWindows(X, y, subject_id), batch_size=batch_size,
-        shuffle=shuffle, collate_fn=_move_collate(device),
+def make_loader(dataset, batch_size=64, shuffle=False, device="cpu",
+                num_workers=0):
+    """Batch a dataset of ``(X, y, info)`` windows onto ``device``."""
+    loader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=shuffle,
+        num_workers=num_workers, persistent_workers=num_workers > 0,
+        pin_memory=str(device).startswith("cuda"),
     )
+    return DeviceLoader(loader, device)

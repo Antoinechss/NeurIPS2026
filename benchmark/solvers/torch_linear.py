@@ -39,7 +39,8 @@ class Solver(CompetSolver):
         return TorchLinearPose(meta["n_chans"], meta["n_joints"]).to(
             meta["device"])
 
-    def fit(self, model, train_loader):
+    def fit(self, model, train_set):
+        train_loader = self.make_loader(train_set)
         # One pass for the target scale, so the loss is well conditioned.
         total = sq = count = 0.0
         for _X, y, _info in train_loader:

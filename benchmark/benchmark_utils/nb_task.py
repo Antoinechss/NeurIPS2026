@@ -1,17 +1,17 @@
 """Data loading through the neuralbench ``emg/pose`` task config.
 
 Built on :func:`neuralbench.experiment_config.merge_task_config` for config
-composition and :class:`neuralbench.data.Data` for the loaders::
+composition and :class:`neuralbench.data.Data` for the datasets::
 
-    loaders, meta = load_task("emg", "pose", data_dir=...)
+    datasets, meta = load_task("emg", "pose", data_dir=...)
 
 Differences with running neuralbench itself:
 
 - everything runs locally with an explicit ``data_dir`` (the study path and
   the exca infra are overridden);
-- the returned loaders follow the competition contract (``(X, y, info)``
-  torch batches moved onto ``device``, see ``benchmark_utils.data``), so
-  nothing downstream is tied to neuralset/neuralbench types.
+- the returned datasets follow the competition contract (``(X, y, info)``
+  CPU tensors, see ``benchmark_utils.data``), so nothing downstream is tied
+  to neuralset/neuralbench types.
 
 Like the rest of the neuro stack, this module is import-heavy; import it
 only from ``datasets/`` modules (never from solvers).
@@ -165,74 +165,33 @@ class _NBWindows(torch.utils.data.Dataset):
         return X, y, {"subject_id": subject}
 
 
-class _DeviceLoader:
-    """Move batches to ``device`` in the main process.
-
-    Worker processes (``num_workers > 0``) cannot move tensors to CUDA, so
-    the wrapped loader collates CPU tensors and this wrapper moves them.
-    Attribute access delegates to the wrapped loader.
-    """
-
-    def __init__(self, loader, device):
-        self.loader = loader
-        self.device = device
-
-    def __iter__(self):
-        for X, y, info in self.loader:
-            yield X.to(self.device, non_blocking=True), y.to(
-                self.device, non_blocking=True), info
-
-    def __len__(self):
-        return len(self.loader)
-
-    def __getattr__(self, name):
-        return getattr(self.loader, name)
-
-
-def load_task(modality, task, *, data_dir, device="cpu", batch_size=64,
-              seed=0, num_workers=0, overrides=None):
-    """Build the competition loaders + meta from a neuralbench task config.
+def load_task(modality, task, *, data_dir, seed=0, overrides=None):
+    """Build the competition datasets + meta from a neuralbench task config.
 
     ``overrides`` are extra ``data:``-section overrides, as dotted keys,
-    applied last. Returns ``loaders`` (``train``, ``val``, ``test``) and
-    ``meta`` (``sfreq, n_chans, n_times, n_joints, device``).
+    applied last. Returns ``datasets`` (``train``, ``val``, ``test``) and
+    ``meta`` (``sfreq, n_chans, n_times, n_joints``).
     """
     from neuralbench.data import Data
-    from torch.utils.data import DataLoader
     _quiet_neuro_logs()
 
-    # ``num_workers=0`` keeps extraction in-process: the task defaults
-    # inject N_CPUS, which over-subscribes platform runners.
+    # Only neuralbench's datasets are kept, batching happens in make_loader.
+    # ``num_workers=0`` stops the task defaults from injecting N_CPUS.
     cfg = _task_data_config(
         modality, task, data_dir,
-        {"batch_size": batch_size, "seed": seed, "num_workers": num_workers,
-         "pin_memory": False, "persistent_workers": False,
-         **(overrides or {})},
+        {"seed": seed, "num_workers": 0, "pin_memory": False,
+         "persistent_workers": False, **(overrides or {})},
     )
     nb_loaders = Data(**cfg).prepare()
-
-    # Keep neuralbench's datasets, batch sizes and train sampler, swap the
-    # collate for the competition one. Test windows are never shuffled.
-    loaders = {}
-    for split, loader in nb_loaders.items():
-        sampler = (getattr(loader, "sampler", None) if split == "train"
-                   else None)
-        cpu_loader = DataLoader(
-            _NBWindows(loader.dataset), batch_size=loader.batch_size,
-            sampler=sampler, shuffle=split == "train" and sampler is None,
-            num_workers=num_workers,
-            pin_memory=str(device).startswith("cuda"),
-            persistent_workers=num_workers > 0,
-        )
-        loaders[split] = _DeviceLoader(cpu_loader, device)
+    datasets = {split: _NBWindows(loader.dataset)
+                for split, loader in nb_loaders.items()}
 
     # Peek one window (lazy) for the shapes.
-    X0, y0, _ = loaders["test"].dataset[0]
+    X0, y0, _ = datasets["test"][0]
     meta = dict(
         sfreq=float(nb_loaders["test"].dataset.extractors["neuro"].frequency),
         n_chans=int(X0.shape[-2]),
         n_times=int(X0.shape[-1]),
         n_joints=int(y0.shape[0]),
-        device=device,
     )
-    return loaders, meta
+    return datasets, meta

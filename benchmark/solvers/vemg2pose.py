@@ -4,7 +4,13 @@ NeuralBench's reference recipe, trained on the platform: L1 loss on the
 angles in radians, Adam at 1e-3, a fixed epoch budget instead of early
 stopping, no augmentation. Its valid convolutions consume a left context
 before the scored samples, recreated here by padding each window on the left.
+
+The decoder rolls the pose out step by step at 50 Hz, so a small batch leaves
+the GPU waiting on kernel launches: training uses batches of 256, compiles
+the encoder, and stops at a wall-clock budget.
 """
+
+import time
 
 import torch
 from braindecode.models import VEMG2Pose
@@ -31,8 +37,13 @@ class PoseNet(nn.Module):
         X = F.pad(X.float(), (LEFT_CONTEXT, 0), mode=mode)
         return self.net(X).transpose(1, 2)              # (B, J, T)
 
-    def fit(self, train_loader, lr=1e-3, n_epochs=20):
+    def fit(self, train_loader, lr=1e-3, n_epochs=20, max_hours=None):
+        # Compile the convolutional encoder only: compiling the rollout loop
+        # traces all 250 steps. CPU runs (CI) stay eager, they lack a toolchain.
+        if next(self.parameters()).is_cuda:
+            self.net.encoder = torch.compile(self.net.encoder)
         opt = torch.optim.Adam(self.parameters(), lr=lr)
+        deadline = time.time() + 3600 * max_hours if max_hours else None
         self.train()
         for _ in range(n_epochs):
             for X, y, _info in train_loader:
@@ -41,6 +52,10 @@ class PoseNet(nn.Module):
                 loss = (self(X) - y).abs()[labelled].mean()
                 loss.backward()
                 opt.step()
+                if deadline and time.time() > deadline:
+                    break
+            if deadline and time.time() > deadline:
+                break
         return self
 
     @torch.no_grad()
@@ -55,11 +70,12 @@ class Solver(CompetSolver):
 
     requirements = ["pip::braindecode"]
 
-    parameters = {"n_epochs": [20]}
+    parameters = {"n_epochs": [100], "batch_size": [256], "max_hours": [4.5]}
 
     def get_model(self, meta):
         return PoseNet(meta["n_chans"], meta["n_joints"], meta["n_times"],
                        meta["sfreq"]).to(meta["device"])
 
-    def fit(self, model, train_loader):
-        model.fit(train_loader, n_epochs=self.n_epochs)
+    def fit(self, model, train_set):
+        model.fit(self.make_loader(train_set), n_epochs=self.n_epochs,
+                  max_hours=self.max_hours)

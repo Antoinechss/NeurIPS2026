@@ -8,14 +8,17 @@ from ``meta["submission_dir"]``. Participants implement:
 
 - ``get_model(self, meta)`` -> model (required): build the untrained model
   and place it on ``meta["device"]``.
-- ``fit(self, model, train_loader)`` (optional): train it. Defaults to
-  ``model.fit(train_loader)``. It runs on the platform, on a GPU.
+- ``fit(self, model, train_set)`` (optional): train it. Defaults to
+  ``model.fit(self.make_loader(train_set))``. It runs on the platform, on a
+  GPU.
 
-``train_loader`` yields ``(X, y, info)`` torch batches already on
-``meta["device"]``: ``X`` is ``(B, n_chans, n_times)`` EMG, ``y`` is
-``(B, n_joints, n_times)`` joint angles in radians (see
-``benchmark_utils.data``). ``meta`` holds ``n_chans, n_times, n_joints,
-sfreq, device, submission_dir``.
+``train_set`` is a torch ``Dataset`` of ``(X, y, info)`` windows on the CPU:
+``X`` is ``(n_chans, n_times)`` EMG, ``y`` is ``(n_joints, n_times)`` joint
+angles in radians (see ``benchmark_utils.data``). ``self.make_loader(
+train_set, batch_size=..., shuffle=...)`` batches it onto ``meta["device"]``
+with the platform's dataloader workers; ``batch_size`` defaults to the
+solver's ``batch_size`` attribute. ``meta`` holds ``n_chans, n_times,
+n_joints, sfreq, device, num_workers, submission_dir``.
 
 The trained model must expose ``model.predict(X) -> (B, n_joints, T')`` in
 radians, with ``X`` a torch batch ``(B, n_chans, n_times)``. A coarser time
@@ -27,6 +30,8 @@ import inspect
 from pathlib import Path
 
 from benchopt import BaseSolver
+
+from benchmark_utils.data import make_loader
 
 
 class CompetSolver(BaseSolver):
@@ -40,18 +45,30 @@ class CompetSolver(BaseSolver):
 
     sampling_strategy = "run_once"
 
-    def set_objective(self, train_loader, **meta):
-        self.train_loader = train_loader
+    # Training batch size of ``make_loader``; a ``batch_size`` parameter
+    # overrides it.
+    batch_size = 64
+
+    def set_objective(self, train_set, **meta):
+        self.train_set = train_set
         self.device = meta["device"]
         submission_dir = Path(inspect.getfile(type(self))).parent
         self.meta = {**meta, "submission_dir": submission_dir}
         self.model = self.get_model(self.meta)
 
     def run(self, _):
-        self.fit(self.model, self.train_loader)
+        self.fit(self.model, self.train_set)
 
     def get_result(self):
         return dict(model=self.model)
+
+    def make_loader(self, dataset, batch_size=None, shuffle=True):
+        """Batch ``dataset`` onto the device with the platform's workers."""
+        return make_loader(
+            dataset, batch_size=batch_size or self.batch_size,
+            shuffle=shuffle, device=self.device,
+            num_workers=self.meta["num_workers"],
+        )
 
     # --- to be implemented by the submission ---------------------------
 
@@ -59,6 +76,6 @@ class CompetSolver(BaseSolver):
         """Build and return the (untrained) model."""
         raise NotImplementedError
 
-    def fit(self, model, train_loader):
+    def fit(self, model, train_set):
         """Train the model in place."""
-        model.fit(train_loader)
+        model.fit(self.make_loader(train_set))

@@ -31,7 +31,7 @@ from benchopt.config import get_data_path
 import neuralbench  # noqa: F401
 from neuralfetch.studies.salter2024emg2pose import Salter2024Emg2pose
 
-from benchmark_utils.data import get_device, make_loader
+from benchmark_utils.data import ArrayWindows, get_device, make_loader
 from benchmark_utils.nb_task import download_study, load_task, require_prepared
 
 _nemar_load_raw = Salter2024Emg2pose._load_raw
@@ -94,9 +94,10 @@ class Dataset(BaseDataset):
 
     parameters = {
         "n_train_subjects": [8],
+        # Evaluation batch size; solvers batch the training set themselves.
         "batch_size": [64],
-        # Dataloader workers; raise it from the phase config on a worker
-        # with spare cores.
+        # Dataloader workers, for evaluation and passed on to solvers; raise
+        # it from the phase config on a worker with spare cores.
         "num_workers": [0],
     }
 
@@ -118,15 +119,12 @@ class Dataset(BaseDataset):
         labels = [f"Salter2024Emg2pose/{s}" for s in subjects]
         return {"study.source.query": f"subject in {labels!r}"}
 
-    def _load(self, device="cpu"):
+    def _load(self):
         cache = str(self._data_dir() / "cache")
         return load_task(
             "emg", "pose",
             data_dir=self._data_dir(),
-            device=device,
-            batch_size=self.batch_size,
             seed=self.get_seed(),
-            num_workers=self.num_workers,
             overrides={
                 **self._query(),
                 # Cache the target extraction next to the data, not in the
@@ -143,22 +141,26 @@ class Dataset(BaseDataset):
     def get_data(self):
         require_prepared("emg", "pose", self._data_dir())
         device = get_device()
-        loaders, meta = self._load(device=device)
+        datasets, meta = self._load()
         # A cache built without the _load_raw fix serves radians x 1e6.
-        y = np.asarray(next(iter(loaders["test"]))[1].cpu(), dtype=float)
+        y = np.asarray(datasets["test"][0][1], dtype=float)
         if np.nanmax(np.abs(y)) > 2 * np.pi:
             raise RuntimeError(
                 f"Joint angles up to {np.nanmax(np.abs(y)):.3g}, not radians: "
                 f"delete {self._data_dir() / 'cache'} and prepare again."
             )
-        test_sets = {"public": loaders["test"]}
+        test_sets = {"public": datasets["test"]}
         sealed = get_data_path("emg2pose_sealed")
         if (sealed / "X.npy").exists():
-            test_sets["private"] = make_loader(
+            test_sets["private"] = ArrayWindows(
                 np.load(sealed / "X.npy", mmap_mode="r"),
                 np.load(sealed / "y.npy", mmap_mode="r"),
                 np.load(sealed / "subject.npy"),
-                batch_size=self.batch_size, device=device,
             )
-        return dict(train_loader=loaders["train"], test_sets=test_sets,
-                    **meta)
+        test_sets = {
+            name: make_loader(ds, batch_size=self.batch_size, device=device,
+                              num_workers=self.num_workers)
+            for name, ds in test_sets.items()
+        }
+        return dict(train_set=datasets["train"], test_sets=test_sets,
+                    device=device, num_workers=self.num_workers, **meta)

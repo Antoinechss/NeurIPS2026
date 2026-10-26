@@ -9,7 +9,7 @@ so a per-time-step linear readout recovers the pose above the noise floor.
 import numpy as np
 from benchopt import BaseDataset
 
-from benchmark_utils.data import get_device, make_loader
+from benchmark_utils.data import ArrayWindows, get_device, make_loader
 
 
 class Dataset(BaseDataset):
@@ -50,14 +50,16 @@ class Dataset(BaseDataset):
         mixing = rng.standard_normal((self.n_chans, self.n_joints)) * 0.3
         device = get_device()
 
-        X, y, subject = self._make_windows(rng, self.n_train, mixing)
-        train_loader = make_loader(X, y, subject, shuffle=True, device=device)
+        train_set = ArrayWindows(
+            *self._make_windows(rng, self.n_train, mixing))
         test_sets = {}
         for name in ("public", "private"):
-            X, y, subject = self._make_windows(rng, self.n_test, mixing)
-            test_sets[name] = make_loader(X, y, subject, device=device)
+            test_sets[name] = make_loader(
+                ArrayWindows(*self._make_windows(rng, self.n_test, mixing)),
+                device=device)
         return dict(
-            train_loader=train_loader, test_sets=test_sets,
+            train_set=train_set, test_sets=test_sets,
             n_joints=self.n_joints, n_chans=self.n_chans,
             n_times=self.n_times, sfreq=self.sfreq, device=device,
+            num_workers=0,
         )

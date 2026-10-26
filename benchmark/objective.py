@@ -1,7 +1,7 @@
 """Objective for the EMG-to-pose competition.
 
 Regress hand joint-angle trajectories from wrist surface EMG. The solver gets
-the training loader and trains its model on the platform; the objective then
+the training dataset and trains its model on the platform; the objective then
 feeds it torch batches ``(B, C, T)`` of 16-channel EMG windows and expects
 ``predict(X) -> (B, n_joints, T')`` in **radians** (a coarser time axis is
 nearest-resampled to the target's ``T``).
@@ -35,16 +35,16 @@ class Objective(BaseObjective):
     # Each solver trains once (no convergence curve).
     sampling_strategy = "run_once"
 
-    def set_data(self, train_loader, test_sets, n_joints, **meta):
+    def set_data(self, train_set, test_sets, n_joints, **meta):
         # test_sets: ``name -> loader``; the test labels stay here so the
         # objective owns evaluation.
-        self.train_loader = train_loader
+        self.train_set = train_set
         self.test_sets = test_sets
         self.n_joints = n_joints
-        self.meta = meta  # n_chans, n_times, sfreq, device
+        self.meta = meta  # n_chans, n_times, sfreq, device, num_workers
 
     def get_objective(self):
-        return dict(train_loader=self.train_loader, n_joints=self.n_joints,
+        return dict(train_set=self.train_set, n_joints=self.n_joints,
                     **self.meta)
 
     def evaluate_result(self, model):
