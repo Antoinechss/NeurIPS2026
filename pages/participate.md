@@ -41,7 +41,6 @@ from benchmark_utils.base_solver import CompetSolver
 
 class Solver(CompetSolver):
     name = "submission"
-    batch_size = 64  # used by self.make_loader
 
     def get_model(self, meta):
         # build your (untrained) torch model on meta["device"]
@@ -55,7 +54,8 @@ class Solver(CompetSolver):
 
 `train_set` is a torch `Dataset` of single windows. `self.make_loader`
 batches it, shuffled, onto the GPU with the platform's dataloader workers,
-so you choose the batch size.
+so you choose the batch size (256 by default). Evaluation calls `predict`
+on batches of 256 windows.
 
 Your trained model must expose `predict(X) -> (B, 20, T')`, angles in
 radians (a coarser time axis `T'` is resampled to `T`). Windows are

@@ -43,17 +43,24 @@ class PoseNet(nn.Module):
         if next(self.parameters()).is_cuda:
             self.net.encoder = torch.compile(self.net.encoder)
         opt = torch.optim.Adam(self.parameters(), lr=lr)
-        deadline = time.time() + 3600 * max_hours if max_hours else None
+        start = time.time()
+        deadline = start + 3600 * max_hours if max_hours else None
         self.train()
-        for _ in range(n_epochs):
+        for epoch in range(n_epochs):
+            # Summed on the device: a per-step .item() would sync the GPU.
+            total, n_steps = 0.0, 0
             for X, y, _info in train_loader:
                 opt.zero_grad()
                 labelled = ~torch.isnan(y)
                 loss = (self(X) - y).abs()[labelled].mean()
                 loss.backward()
                 opt.step()
+                total, n_steps = total + loss.detach(), n_steps + 1
                 if deadline and time.time() > deadline:
                     break
+            print(f"VEMG2Pose epoch {epoch + 1}: train L1 "
+                  f"{float(total) / max(n_steps, 1):.4f} rad over {n_steps} "
+                  f"steps, {(time.time() - start) / 60:.1f} min", flush=True)
             if deadline and time.time() > deadline:
                 break
         return self
@@ -77,5 +84,5 @@ class Solver(CompetSolver):
                        meta["sfreq"]).to(meta["device"])
 
     def fit(self, model, train_set):
-        model.fit(self.make_loader(train_set), n_epochs=self.n_epochs,
-                  max_hours=self.max_hours)
+        model.fit(self.make_loader(train_set, batch_size=self.batch_size),
+                  n_epochs=self.n_epochs, max_hours=self.max_hours)

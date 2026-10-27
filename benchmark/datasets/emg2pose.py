@@ -95,7 +95,7 @@ class Dataset(BaseDataset):
     parameters = {
         "n_train_subjects": [8],
         # Evaluation batch size; solvers batch the training set themselves.
-        "batch_size": [64],
+        "batch_size": [256],
         # Dataloader workers, for evaluation and passed on to solvers; raise
         # it from the phase config on a worker with spare cores.
         "num_workers": [0],

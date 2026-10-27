@@ -15,9 +15,8 @@ from ``meta["submission_dir"]``. Participants implement:
 ``train_set`` is a torch ``Dataset`` of ``(X, y, info)`` windows on the CPU:
 ``X`` is ``(n_chans, n_times)`` EMG, ``y`` is ``(n_joints, n_times)`` joint
 angles in radians (see ``benchmark_utils.data``). ``self.make_loader(
-train_set, batch_size=..., shuffle=...)`` batches it onto ``meta["device"]``
-with the platform's dataloader workers; ``batch_size`` defaults to the
-solver's ``batch_size`` attribute. ``meta`` holds ``n_chans, n_times,
+train_set, batch_size=256, shuffle=True)`` batches it onto ``meta["device"]``
+with the platform's dataloader workers. ``meta`` holds ``n_chans, n_times,
 n_joints, sfreq, device, num_workers, submission_dir``.
 
 The trained model must expose ``model.predict(X) -> (B, n_joints, T')`` in
@@ -45,10 +44,6 @@ class CompetSolver(BaseSolver):
 
     sampling_strategy = "run_once"
 
-    # Training batch size of ``make_loader``; a ``batch_size`` parameter
-    # overrides it.
-    batch_size = 64
-
     def set_objective(self, train_set, **meta):
         self.train_set = train_set
         self.device = meta["device"]
@@ -62,11 +57,10 @@ class CompetSolver(BaseSolver):
     def get_result(self):
         return dict(model=self.model)
 
-    def make_loader(self, dataset, batch_size=None, shuffle=True):
+    def make_loader(self, dataset, batch_size=256, shuffle=True):
         """Batch ``dataset`` onto the device with the platform's workers."""
         return make_loader(
-            dataset, batch_size=batch_size or self.batch_size,
-            shuffle=shuffle, device=self.device,
+            dataset, batch_size=batch_size, shuffle=shuffle, device=self.device,
             num_workers=self.meta["num_workers"],
         )
 

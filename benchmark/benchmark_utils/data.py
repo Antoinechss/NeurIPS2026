@@ -117,7 +117,7 @@ class DeviceLoader:
         return getattr(self.loader, name)
 
 
-def make_loader(dataset, batch_size=64, shuffle=False, device="cpu",
+def make_loader(dataset, batch_size=256, shuffle=False, device="cpu",
                 num_workers=0):
     """Batch a dataset of ``(X, y, info)`` windows onto ``device``."""
     loader = DataLoader(
