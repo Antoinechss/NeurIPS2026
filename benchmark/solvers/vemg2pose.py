@@ -77,7 +77,8 @@ class Solver(CompetSolver):
 
     requirements = ["pip::braindecode"]
 
-    parameters = {"n_epochs": [100], "batch_size": [256], "max_hours": [4.5]}
+    parameters = {"n_epochs": [100], "batch_size": [256], "lr": [1e-3],
+                  "max_hours": [4.5]}
 
     def get_model(self, meta):
         return PoseNet(meta["n_chans"], meta["n_joints"], meta["n_times"],
@@ -85,4 +86,4 @@ class Solver(CompetSolver):
 
     def fit(self, model, train_set):
         model.fit(self.make_loader(train_set, batch_size=self.batch_size),
-                  n_epochs=self.n_epochs, max_hours=self.max_hours)
+                  lr=self.lr, n_epochs=self.n_epochs, max_hours=self.max_hours)
