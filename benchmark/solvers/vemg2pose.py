@@ -1,9 +1,9 @@
 """Baseline: VEMG2Pose (Salter et al. 2024), emg2pose's regression model.
 
-NeuralBench's reference recipe, trained on the platform: L1 loss on the
-angles in radians, Adam at 1e-3, a fixed epoch budget instead of early
-stopping, no augmentation. Its valid convolutions consume a left context
-before the scored samples, recreated here by padding each window on the left.
+NeuralBench's reference recipe: L1 loss on the angles in radians, Adam at
+1e-3, a fixed epoch budget instead of early stopping, no augmentation. Its
+valid convolutions consume a left context before the scored samples,
+recreated here by padding each window on the left.
 
 The decoder rolls the pose out step by step at 50 Hz, so a small batch leaves
 the GPU waiting on kernel launches: training uses batches of 256, compiles
@@ -39,7 +39,7 @@ class PoseNet(nn.Module):
 
     def fit(self, train_loader, lr=1e-3, n_epochs=20, max_hours=None):
         # Compile the convolutional encoder only: compiling the rollout loop
-        # traces all 250 steps. CPU runs (CI) stay eager, they lack a toolchain.
+        # traces all 250 steps. CPU runs (CI) stay eager, with no toolchain.
         if next(self.parameters()).is_cuda:
             self.net.encoder = torch.compile(self.net.encoder)
         opt = torch.optim.Adam(self.parameters(), lr=lr)
@@ -80,7 +80,7 @@ class Solver(CompetSolver):
     parameters = {"n_epochs": [100], "batch_size": [256], "lr": [1e-3],
                   "max_hours": [4.5]}
 
-    def get_model(self, meta):
+    def load_model(self, meta):
         return PoseNet(meta["n_chans"], meta["n_joints"], meta["n_times"],
                        meta["sfreq"]).to(meta["device"])
 

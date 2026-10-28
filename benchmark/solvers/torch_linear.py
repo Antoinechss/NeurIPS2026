@@ -35,7 +35,7 @@ class Solver(CompetSolver):
 
     name = "Torch-Linear"
 
-    def get_model(self, meta):
+    def load_model(self, meta):
         return TorchLinearPose(meta["n_chans"], meta["n_joints"]).to(
             meta["device"])
 

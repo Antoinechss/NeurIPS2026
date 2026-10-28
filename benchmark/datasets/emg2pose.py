@@ -8,7 +8,8 @@ trajectories in radians, with the corpus' predefined split.
 
 - **Training set**: the train split of the first ``n_train_subjects`` of
   the 158 training users. The full corpus is ~340 GB; the subset sizes the
-  download and the training for the platform's time budget.
+  download and the training. The platform does not train, so it stages a
+  single training user.
 - **public** test set: the corpus' ``user_stage`` test rows, from 20 users
   absent from training, on held-out movement stages.
 - **private** test set: a sealed cohort of new users, staged on the worker

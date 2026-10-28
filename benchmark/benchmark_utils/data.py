@@ -44,7 +44,7 @@ def get_device():
     """``cuda`` when available, else ``cpu``; ``COMPET_DEVICE`` overrides.
 
     Datasets move every batch onto this device and advertise it through
-    ``meta["device"]``, so a model can place itself there in ``get_model``.
+    ``meta["device"]``, so a model can place itself there in ``load_model``.
     """
     forced = os.environ.get("COMPET_DEVICE")
     if forced:

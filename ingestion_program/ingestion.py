@@ -14,7 +14,8 @@ The phase ``config.yaml`` is a **native benchopt run config** (``dataset``,
 ``seed``, ``no_timeout``, ...) plus one competition-only key stripped before
 the run (benchopt rejects unknown options): ``scoring`` (parsed by scoring.py
 — the config is forwarded with the raw results parquet; all evaluation happens
-in the objective, which always trains the solver). The data location is the
+in the objective, which the config runs with ``training=False``: the
+submission is evaluated as loaded). The data location is the
 image's $BENCHOPT_DATA_HOME (/app/data, where the compute worker mounts the
 staged data read-only). $BENCHOPT_DEBUG ensures any solver error aborts the
 run.

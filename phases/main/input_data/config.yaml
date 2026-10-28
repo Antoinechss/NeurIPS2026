@@ -1,7 +1,11 @@
 # Phase config — a native `benchopt run --config` file plus one competition
 # key (`scoring`) read by the scoring program and stripped by ingestion.
+# Inference only: submissions ship trained weights, so the worker stages a
+# single training user.
+objective:
+  - EMG-pose[training=False]
 dataset:
-  - EMG2Pose
+  - EMG2Pose[n_train_subjects=1]
 seed: 42
 no_timeout: true
 scoring:

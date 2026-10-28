@@ -20,20 +20,24 @@ per-subject MAE and the R2 are also shown.
 
 ## The split
 
-- **Training set**: emg2pose recordings of a subset of the users.
-- **Public column** (live feedback): held-out movement stages of users seen
-  elsewhere in the data.
+- **Training set**: the emg2pose recordings of up to 158 training users, the
+  ones the `EMG2Pose` dataset lists for training. Choose how many you use
+  with its `n_train_subjects` parameter (8 by default).
+- **Public column** (live feedback): held-out movement stages of 20 users
+  absent from the training set.
 - **Private / final ranking** (hidden): a private cohort of **new users**.
   Generalizing across people (anatomy, band placement) is the challenge: do
   not overfit the public column.
 
 ## What you submit
 
-A single **`submission.py`** defining `class Solver(CompetSolver)`. All your
-Python code must live in this one file: the platform loads it on its own, so
-it cannot import other `.py` files you ship. You may add non-code files next
-to it (configs, pretrained weights) and read them from
-`meta["submission_dir"]`.
+You train **on your own machine** and submit the trained model. The platform
+only evaluates it, on a GPU.
+
+A submission is a folder, zipped: a **`submission.py`** defining
+`class Solver(CompetSolver)` and the weight files it loads. All your Python
+code must live in `submission.py`: the platform loads it on its own, so it
+cannot import other `.py` files you ship.
 
 ```python
 from benchmark_utils.base_solver import CompetSolver
@@ -42,35 +46,50 @@ from benchmark_utils.base_solver import CompetSolver
 class Solver(CompetSolver):
     name = "submission"
 
-    def get_model(self, meta):
-        # build your (untrained) torch model on meta["device"]
+    def load_model(self, meta):
+        # build your torch model, load the weights shipped next to this file
+        # from meta["submission_dir"], put it on meta["device"]
         ...
 
     def fit(self, model, train_set):
-        # optional: train it (default: model.fit(self.make_loader(train_set)))
+        # train it (local runs only)
         for X, y, info in self.make_loader(train_set, batch_size=128):
             ...  # X: (B, 16, T) EMG, y: (B, 20, T) angles in radians
+
+    def save_model(self, model, path):
+        # write the trained weights into the folder `path`
+        ...
 ```
 
 `train_set` is a torch `Dataset` of single windows. `self.make_loader`
-batches it, shuffled, onto the GPU with the platform's dataloader workers,
-so you choose the batch size (256 by default). Evaluation calls `predict`
-on batches of 256 windows.
+batches it, shuffled, onto the GPU, so you choose the batch size (256 by
+default). Evaluation calls `predict` on batches of 256 windows.
 
-Your trained model must expose `predict(X) -> (B, 20, T')`, angles in
-radians (a coarser time axis `T'` is resampled to `T`). Windows are
-independent: do not rely on their order. The platform **trains your code on
-a GPU** within the time limit (1 hour), then evaluates it. See
-`solution/submission.py` and `benchmark/solvers/` for working baselines.
+Your model must expose `predict(X) -> (B, 20, T')`, angles in radians (a
+coarser time axis `T'` is resampled to `T`). Windows are independent: do not
+rely on their order. See `solution/submission.py` and `benchmark/solvers/`
+for working baselines.
+
+**`fit` must reproduce your weights.** After the competition, the organizers
+retrain the top-ranked submissions from their `submission.py` (see the
+terms). Keep all the training in `fit`, and write at the top of the file the
+`n_train_subjects` you used and how long training took on which GPU.
 
 ## Run it locally, same code as the server
 
 ```bash
 pip install -r requirements.txt
 benchopt run benchmark -d Simulated -s solution/submission.py   # smoke test
-benchopt prepare benchmark -d EMG2Pose                          # large download
-benchopt run benchmark -d EMG2Pose -s solution/submission.py
+benchopt prepare benchmark -d "EMG2Pose[n_train_subjects=8]"    # large download
+# train, save the weights next to submission.py, and score them
+benchopt run benchmark -d "EMG2Pose[n_train_subjects=8]" -s solution/submission.py
+# evaluate exactly as the server does: load the weights, no training
+benchopt run benchmark -d "EMG2Pose[n_train_subjects=8]" -s solution/submission.py \
+    -o "EMG-pose[training=False]"
 ```
+
+A training run overwrites the weights next to `submission.py`: train on
+`EMG2Pose` last, then zip the folder and upload it.
 
 The number you get locally on the public split is the number the leaderboard
 shows. The benchmark you run *is* the benchmark the server runs.

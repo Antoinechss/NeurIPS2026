@@ -2,9 +2,10 @@ version: 2
 title: "EMG2Pose: hand pose from wrist EMG"
 description: >
   Predict the 20 joint angles of the hand over time from 16-channel wrist
-  surface EMG. Submissions are code (a benchopt solver) that trains on the
-  platform, on a GPU. The public leaderboard column scores held-out movement
-  stages; the final ranking uses a hidden private cohort of new users.
+  surface EMG. Submissions are a benchopt solver and its trained weights,
+  evaluated on the platform, on a GPU. The public leaderboard column scores
+  held-out movement stages; the final ranking uses a hidden private cohort
+  of new users.
 image: logo.png
 registration_auto_approve: False
 
@@ -29,7 +30,7 @@ tasks:
     name: EMG to pose
     description: >
       The ingestion program runs the benchopt benchmark on your submission
-      (training on the platform); scoring parses the results.
+      (evaluation only); scoring parses the results.
     input_data: main_phase/input_data/
     reference_data: main_phase/reference_data/
     ingestion_program: ingestion_program/
@@ -46,8 +47,9 @@ phases:
   - index: 0
     name: Competition
     description: >
-      Build, train and submit your model. The public column scores the public
-      test set; the final ranking uses the hidden private test set.
+      Train your model locally, submit it with its weights. The public
+      column scores the public test set; the final ranking uses the hidden
+      private test set.
     start: 2026-11-03 00:00:00
     end: 2027-01-31 23:59:59
     execution_time_limit: 3600

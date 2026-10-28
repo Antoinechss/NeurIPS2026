@@ -66,6 +66,6 @@ class Solver(CompetSolver):
 
     requirements = ["pip::braindecode"]
 
-    def get_model(self, meta):
+    def load_model(self, meta):
         return DensePose(meta["n_chans"], meta["n_joints"],
                          meta["n_times"]).to(meta["device"])

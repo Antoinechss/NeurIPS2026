@@ -2,8 +2,8 @@
 
 A DataCamp challenge on the public emg2pose corpus (Salter et al., 2024).
 Given a 5-second window of 16-channel wrist surface EMG, predict the
-trajectories of the 20 joint angles of the hand. Submissions train on the
-platform, on a GPU.
+trajectories of the 20 joint angles of the hand. Participants train
+locally and submit trained weights, which the platform evaluates on a GPU.
 
 The evaluation is a [benchopt](https://benchopt.github.io) benchmark run on
 Codabench: participants run locally the same code the server runs.
@@ -13,7 +13,7 @@ Codabench: participants run locally the same code the server runs.
 | Path | Content |
 |---|---|
 | `benchmark/` | the benchopt benchmark: objective, datasets (`EMG2Pose`, `Simulated`), baseline solvers (`MeanPose`, `Ridge`, `Torch-Linear`, `EEGNet`) |
-| `solution/submission.py` | sample submission (small temporal CNN) |
+| `solution/` | sample submission (small temporal CNN) and its weights |
 | `ingestion_program/`, `scoring_program/` | Codabench programs: run `benchopt run`, parse the results |
 | `phases/main/input_data/config.yaml` | phase run config and leaderboard column map |
 | `competition.yaml`, `pages/` | Codabench competition and pages |

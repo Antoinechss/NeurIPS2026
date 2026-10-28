@@ -50,5 +50,5 @@ class Solver(CompetSolver):
 
     requirements = ["scikit-learn"]
 
-    def get_model(self, meta):
+    def load_model(self, meta):
         return TimeRidge(meta["n_joints"])

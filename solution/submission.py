@@ -1,21 +1,30 @@
 """Sample submission: the starting point participants copy and improve.
 
 A submission is a benchopt solver: a ``submission.py`` defining
-``class Solver(CompetSolver)`` with a ``get_model`` method (and optionally
-``fit``). See ``benchmark/benchmark_utils/base_solver.py`` for the contract.
+``class Solver(CompetSolver)``, next to its trained weights. The platform only
+evaluates: it calls ``load_model`` and scores ``predict``. ``fit`` runs
+locally and must reproduce the weights. See
+``benchmark/benchmark_utils/base_solver.py`` for the contract.
 
-Run it locally exactly as the platform does::
+Train locally, which writes ``weights.pt`` next to this file, then zip this
+folder and upload it::
 
-    benchopt run benchmark -d Simulated -s solution/submission.py
-    # real data (large download, GPU recommended)
+    benchopt run benchmark -d Simulated -s solution/submission.py   # smoke
     benchopt prepare benchmark -d EMG2Pose
     benchopt run benchmark -d EMG2Pose -s solution/submission.py
+    # check the upload exactly as the platform runs it (no training)
+    benchopt run benchmark -d EMG2Pose -s solution/submission.py \
+        -o "EMG-pose[training=False]"
+
+A training run overwrites ``weights.pt``: train on EMG2Pose last.
 """
 
 import torch
 from torch import nn
 
 from benchmark_utils.base_solver import CompetSolver
+
+WEIGHTS = "weights.pt"
 
 
 class ConvPose(nn.Module):
@@ -54,5 +63,12 @@ class Solver(CompetSolver):
 
     name = "submission"
 
-    def get_model(self, meta):
-        return ConvPose(meta["n_chans"], meta["n_joints"]).to(meta["device"])
+    def load_model(self, meta):
+        model = ConvPose(meta["n_chans"], meta["n_joints"])
+        weights = meta["submission_dir"] / WEIGHTS
+        if weights.exists():
+            model.load_state_dict(torch.load(weights, map_location="cpu"))
+        return model.to(meta["device"])
+
+    def save_model(self, model, path):
+        torch.save(model.state_dict(), path / WEIGHTS)

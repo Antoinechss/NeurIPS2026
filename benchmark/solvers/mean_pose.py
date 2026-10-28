@@ -12,5 +12,5 @@ class Solver(CompetSolver):
 
     name = "MeanPose"
 
-    def get_model(self, meta):
+    def load_model(self, meta):
         return ConstantPose(meta["n_joints"])

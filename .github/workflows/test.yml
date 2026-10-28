@@ -40,7 +40,7 @@ jobs:
           python tools/create_bundle.py
           python -c "import zipfile; zipfile.ZipFile('bundle.zip').extractall('_bundle')"
           # No real data in CI: run the phase on the Simulated dataset.
-          sed -i 's/- EMG2Pose/- Simulated/' _bundle/main_phase/input_data/config.yaml
+          sed -i 's/- EMG2Pose.*/- Simulated/' _bundle/main_phase/input_data/config.yaml
           python _bundle/ingestion_program/ingestion.py \
             --submission-dir _bundle/solution \
             --input-data _bundle/main_phase/input_data \

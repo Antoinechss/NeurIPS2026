@@ -3,14 +3,18 @@
 A submission is a **valid benchopt solver**: a folder with a ``submission.py``
 defining ``class Solver(CompetSolver)``. All its Python code lives in that
 single file (benchopt loads it by path, so sibling ``.py`` files cannot be
-imported); the folder may also hold non-code files (weights, configs) read
-from ``meta["submission_dir"]``. Participants implement:
+imported); the folder also holds the trained weights, read from
+``meta["submission_dir"]``. The platform only evaluates: it never trains.
+Participants implement:
 
-- ``get_model(self, meta)`` -> model (required): build the untrained model
-  and place it on ``meta["device"]``.
-- ``fit(self, model, train_set)`` (optional): train it. Defaults to
-  ``model.fit(self.make_loader(train_set))``. It runs on the platform, on a
-  GPU.
+- ``load_model(self, meta)`` -> model (required): build the model, load the
+  shipped weights when they exist, and place it on ``meta["device"]``.
+- ``fit(self, model, train_set)``: train it. Defaults to
+  ``model.fit(self.make_loader(train_set))``. It runs locally only, when the
+  objective's ``training`` parameter is on (the default), and must reproduce
+  the shipped weights: the organizers retrain the top submissions with it.
+- ``save_model(self, model, path)``: write the trained weights into the
+  submission folder ``path``, after ``fit``.
 
 ``train_set`` is a torch ``Dataset`` of ``(X, y, info)`` windows on the CPU:
 ``X`` is ``(n_chans, n_times)`` EMG, ``y`` is ``(n_joints, n_times)`` joint
@@ -49,10 +53,13 @@ class CompetSolver(BaseSolver):
         self.device = meta["device"]
         submission_dir = Path(inspect.getfile(type(self))).parent
         self.meta = {**meta, "submission_dir": submission_dir}
-        self.model = self.get_model(self.meta)
+        self.model = self.load_model(self.meta)
 
     def run(self, _):
-        self.fit(self.model, self.train_set)
+        # No training set on the platform: the model is the loaded one.
+        if self.train_set is not None:
+            self.fit(self.model, self.train_set)
+            self.save_model(self.model, self.meta["submission_dir"])
 
     def get_result(self):
         return dict(model=self.model)
@@ -60,16 +67,19 @@ class CompetSolver(BaseSolver):
     def make_loader(self, dataset, batch_size=256, shuffle=True):
         """Batch ``dataset`` onto the device with the platform's workers."""
         return make_loader(
-            dataset, batch_size=batch_size, shuffle=shuffle, device=self.device,
-            num_workers=self.meta["num_workers"],
+            dataset, batch_size=batch_size, shuffle=shuffle,
+            device=self.device, num_workers=self.meta["num_workers"],
         )
 
     # --- to be implemented by the submission ---------------------------
 
-    def get_model(self, meta):
-        """Build and return the (untrained) model."""
+    def load_model(self, meta):
+        """Build and return the model, with its trained weights if any."""
         raise NotImplementedError
 
     def fit(self, model, train_set):
         """Train the model in place."""
         model.fit(self.make_loader(train_set))
+
+    def save_model(self, model, path):
+        """Write the trained weights into the folder ``path``."""

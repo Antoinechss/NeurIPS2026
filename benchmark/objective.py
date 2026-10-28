@@ -1,10 +1,11 @@
 """Objective for the EMG-to-pose competition.
 
-Regress hand joint-angle trajectories from wrist surface EMG. The solver gets
-the training dataset and trains its model on the platform; the objective then
-feeds it torch batches ``(B, C, T)`` of 16-channel EMG windows and expects
-``predict(X) -> (B, n_joints, T')`` in **radians** (a coarser time axis is
-nearest-resampled to the target's ``T``).
+Regress hand joint-angle trajectories from wrist surface EMG. With
+``training`` on (the local default), the solver gets the training dataset and
+trains its model; the platform turns it off, so the submitted model is
+evaluated as loaded. The objective feeds it torch batches ``(B, C, T)`` of
+16-channel EMG windows and expects ``predict(X) -> (B, n_joints, T')`` in
+**radians** (a coarser time axis is nearest-resampled to the target's ``T``).
 
 Ranking metric: **mean angular MAE** in degrees, over joints and time.
 Reported alongside: the mean and standard deviation of the per-subject MAE,
@@ -32,6 +33,9 @@ class Objective(BaseObjective):
 
     min_benchopt_version = "1.10.0"
 
+    # The phase config sets training=False: the platform only evaluates.
+    parameters = {"training": [True]}
+
     # Each solver trains once (no convergence curve).
     sampling_strategy = "run_once"
 
@@ -44,7 +48,8 @@ class Objective(BaseObjective):
         self.meta = meta  # n_chans, n_times, sfreq, device, num_workers
 
     def get_objective(self):
-        return dict(train_set=self.train_set, n_joints=self.n_joints,
+        train_set = self.train_set if self.training else None
+        return dict(train_set=train_set, n_joints=self.n_joints,
                     **self.meta)
 
     def evaluate_result(self, model):
