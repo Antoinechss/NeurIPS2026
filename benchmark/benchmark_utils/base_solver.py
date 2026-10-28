@@ -14,7 +14,9 @@ Participants implement:
   objective's ``training`` parameter is on (the default), and must reproduce
   the shipped weights: the organizers retrain the top submissions with it.
 - ``save_model(self, model, path)``: write the trained weights into the
-  submission folder ``path``, after ``fit``.
+  folder ``path``. After ``fit``, the run exports the solver as
+  ``benchmark/outputs/<name>/submission.py`` next to these weights, and zips
+  that folder into ``benchmark/outputs/<name>.zip``, ready to upload.
 
 ``train_set`` is a torch ``Dataset`` of ``(X, y, info)`` windows on the CPU:
 ``X`` is ``(n_chans, n_times)`` EMG, ``y`` is ``(n_joints, n_times)`` joint
@@ -30,9 +32,11 @@ windows: do not rely on their order or keep state across ``predict`` calls.
 """
 
 import inspect
+import shutil
 from pathlib import Path
 
 from benchopt import BaseSolver
+from benchopt.benchmark import get_running_benchmark
 
 from benchmark_utils.data import make_loader
 
@@ -59,7 +63,18 @@ class CompetSolver(BaseSolver):
         # No training set on the platform: the model is the loaded one.
         if self.train_set is not None:
             self.fit(self.model, self.train_set)
-            self.save_model(self.model, self.meta["submission_dir"])
+            if type(self).save_model is not CompetSolver.save_model:
+                self._export()
+
+    def _export(self):
+        """Write ``outputs/<name>/`` (solver + weights) and its zip."""
+        out = get_running_benchmark().get_output_folder() / self.name
+        shutil.rmtree(out, ignore_errors=True)
+        out.mkdir(parents=True)
+        shutil.copyfile(inspect.getfile(type(self)), out / "submission.py")
+        self.save_model(self.model, out)
+        archive = shutil.make_archive(str(out), "zip", out)
+        print(f"[compet] submission ready to upload: {archive}", flush=True)
 
     def get_result(self):
         return dict(model=self.model)

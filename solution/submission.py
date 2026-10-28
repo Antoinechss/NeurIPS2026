@@ -6,17 +6,18 @@ evaluates: it calls ``load_model`` and scores ``predict``. ``fit`` runs
 locally and must reproduce the weights. See
 ``benchmark/benchmark_utils/base_solver.py`` for the contract.
 
-Train locally, which writes ``weights.pt`` next to this file, then zip this
-folder and upload it::
+A training run writes the ready-to-upload ``benchmark/outputs/submission.zip``
+(this file and ``weights.pt``), and the folder it zips::
 
     benchopt run benchmark -d Simulated -s solution/submission.py   # smoke
     benchopt prepare benchmark -d EMG2Pose
     benchopt run benchmark -d EMG2Pose -s solution/submission.py
     # check the upload exactly as the platform runs it (no training)
-    benchopt run benchmark -d EMG2Pose -s solution/submission.py \
-        -o "EMG-pose[training=False]"
+    S=benchmark/outputs/submission/submission.py
+    benchopt run benchmark -d EMG2Pose -s $S -o "EMG-pose[training=False]"
 
-A training run overwrites ``weights.pt``: train on EMG2Pose last.
+Each training run overwrites them: train on EMG2Pose last. Without
+``weights.pt`` next to it, the model keeps its random initialization.
 """
 
 import torch

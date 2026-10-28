@@ -48,7 +48,7 @@ class Solver(CompetSolver):
 
     def load_model(self, meta):
         # build your torch model, load the weights shipped next to this file
-        # from meta["submission_dir"], put it on meta["device"]
+        # from meta["submission_dir"] if they exist, put it on meta["device"]
         ...
 
     def fit(self, model, train_set):
@@ -81,15 +81,17 @@ terms). Keep all the training in `fit`, and write at the top of the file the
 pip install -r requirements.txt
 benchopt run benchmark -d Simulated -s solution/submission.py   # smoke test
 benchopt prepare benchmark -d "EMG2Pose[n_train_subjects=8]"    # large download
-# train, save the weights next to submission.py, and score them
+# train, score, and write the submission
 benchopt run benchmark -d "EMG2Pose[n_train_subjects=8]" -s solution/submission.py
-# evaluate exactly as the server does: load the weights, no training
-benchopt run benchmark -d "EMG2Pose[n_train_subjects=8]" -s solution/submission.py \
-    -o "EMG-pose[training=False]"
+# evaluate it exactly as the server does: load the weights, no training
+benchopt run benchmark -d "EMG2Pose[n_train_subjects=8]" \
+    -s benchmark/outputs/submission/submission.py -o "EMG-pose[training=False]"
 ```
 
-A training run overwrites the weights next to `submission.py`: train on
-`EMG2Pose` last, then zip the folder and upload it.
+A training run writes `benchmark/outputs/<name>.zip`, your `submission.py`
+and the weights `save_model` wrote: upload this zip. It also leaves the
+folder it zips, `benchmark/outputs/<name>/`. Each training run overwrites
+them, so train on `EMG2Pose` last.
 
 The number you get locally on the public split is the number the leaderboard
 shows. The benchmark you run *is* the benchmark the server runs.
