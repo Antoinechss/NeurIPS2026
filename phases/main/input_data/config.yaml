@@ -5,7 +5,7 @@
 objective:
   - EMG-pose[training=False]
 dataset:
-  - EMG2Pose[n_train_subjects=1, num_workers=8]
+  - EMG2Pose[n_train_subjects=1, num_workers=8, mode=full]
 seed: 42
 no_timeout: true
 scoring:
@@ -14,7 +14,8 @@ scoring:
     angular_mae: objective_angular_mae_public
     angular_mae_subject_std: objective_angular_mae_subject_std_public
     r2: objective_r2_public
-  # Private columns, once the sealed cohort is staged on the worker:
-  # angular_mae_private: objective_angular_mae_private
-  # angular_mae_subject_std_private: objective_angular_mae_subject_std_private
-  # r2_private: objective_r2_private
+    # Private columns (hidden on the leaderboard): the sealed cohort,
+    # staged on the worker by mode=full.
+    angular_mae_private: objective_angular_mae_private
+    angular_mae_subject_std_private: objective_angular_mae_subject_std_private
+    r2_private: objective_r2_private

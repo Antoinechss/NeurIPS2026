@@ -12,10 +12,11 @@ trajectories in radians, with the corpus' predefined split.
   single training user.
 - **public** test set: the corpus' ``user_stage`` test rows, from 20 users
   absent from training, on held-out movement stages.
-- **private** test set: a sealed cohort of new users, staged on the worker
-  only, under ``get_data_path("emg2pose_sealed")`` as ``X.npy`` (N, 16, T),
-  ``y.npy`` (N, 20, T) in radians and ``subject.npy`` (N,). Absent locally,
-  so a local run scores the public set only.
+- **private** test set, ``mode="full"`` only: the sealed 2026 cohort of new
+  users, a BIDS tree in the public corpus' layout. Its zip sits in
+  ``get_data_path("emg2pose_sealed_raw")`` on the staging worker only, and
+  goes through the same task pipeline as the public set. Participants run
+  ``mode="public"``, which scores the public set alone.
 
 ``prepare`` downloads these subjects only and runs the extraction once: it
 caches next to the data, so runs only read warm caches. Both steps are
@@ -23,7 +24,13 @@ idempotent. The download opens one connection per CPU, and NEMAR throttles
 each connection, so prepare on a machine with many cores.
 """
 
+import json
+import typing as tp
+import zipfile
+
 import numpy as np
+from pathlib import Path
+
 from benchopt import BaseDataset
 from benchopt.config import get_data_path
 
@@ -32,7 +39,7 @@ from benchopt.config import get_data_path
 import neuralbench  # noqa: F401
 from neuralfetch.studies.salter2024emg2pose import Salter2024Emg2pose
 
-from benchmark_utils.data import ArrayWindows, get_device, make_loader
+from benchmark_utils.data import get_device, make_loader
 from benchmark_utils.nb_task import download_study, load_task, require_prepared
 
 _nemar_load_raw = Salter2024Emg2pose._load_raw
@@ -52,6 +59,43 @@ def _load_raw(self, timeline):
 
 
 Salter2024Emg2pose._load_raw = _load_raw
+
+SEALED_ZIP = "secret-test-set-bids.zip"
+SEALED_ROOT = "secret-test-set-bids"
+
+
+class Emg2poseSealed2026(Salter2024Emg2pose):
+    """The sealed 2026 cohort: the public corpus' BIDS layout, whose
+    ``scans.tsv`` already marks every recording as a ``user_stage`` test."""
+
+    aliases: tp.ClassVar[tuple[str, ...]] = ()
+    description: tp.ClassVar[str] = (
+        "The sealed 2026 emg2pose cohort, staged on the worker.")
+    # The study checks the BIDS tree holds this many recordings: the 267 of
+    # the cohort, plus the two copies below.
+    _info: tp.ClassVar = Salter2024Emg2pose._info.model_copy(
+        update=dict(num_timelines=269, num_subjects=6))
+
+    def _download(self, overwrite=False):
+        raise FileNotFoundError(
+            f"The sealed cohort is not downloaded: unzip {SEALED_ZIP} into "
+            f"{self.path}.")
+
+    @property
+    def bids_root(self):
+        return self.path / SEALED_ROOT
+
+    def iter_timelines(self):
+        """The cohort, all test, plus its longest recording copied into
+        train and val: neuralbench cannot build an empty split."""
+        timelines = list(super().iter_timelines())
+        longest = max(timelines, key=lambda t: json.loads(
+            Path(t["path"]).with_suffix(".json").read_text())[
+                "RecordingDuration"])
+        yield from timelines
+        for split in ("train", "val"):
+            yield {**longest, "split": split}
+
 
 # BIDS labels from the corpus metadata (emg2pose_metadata.csv): the users of
 # the ``user_stage`` test rows, and the users with training recordings.
@@ -100,6 +144,8 @@ class Dataset(BaseDataset):
         # Dataloader workers, for evaluation and passed on to solvers; raise
         # it from the phase config on a worker with spare cores.
         "num_workers": [0],
+        # "full" adds the sealed private test set, on the staging worker.
+        "mode": ["public"],
     }
 
     # Loader settings do not change the prepared data.
@@ -108,9 +154,26 @@ class Dataset(BaseDataset):
     def prepare(self):
         download_study("emg", "pose", self._data_dir(), self._query())
         self._load()
+        if self.mode == "full":
+            study = self._sealed_dir() / Emg2poseSealed2026.__name__
+            if not (study / SEALED_ROOT).is_dir():
+                archive = get_data_path("emg2pose_sealed_raw") / SEALED_ZIP
+                if not archive.is_file():
+                    raise SystemExit(
+                        f"[EMG2Pose] mode=full needs the sealed cohort at "
+                        f"{archive}: stage.sh fetches it on the worker.")
+                with zipfile.ZipFile(archive) as z:
+                    z.extractall(study, [n for n in z.namelist()
+                                         if n.startswith(f"{SEALED_ROOT}/")])
+            self._load_sealed()
 
     def _data_dir(self):
         path = get_data_path("emg2pose")
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _sealed_dir(self):
+        path = get_data_path("emg2pose_sealed")
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -151,13 +214,10 @@ class Dataset(BaseDataset):
                 f"delete {self._data_dir() / 'cache'} and prepare again."
             )
         test_sets = {"public": datasets["test"]}
-        sealed = get_data_path("emg2pose_sealed")
-        if (sealed / "X.npy").exists():
-            test_sets["private"] = ArrayWindows(
-                np.load(sealed / "X.npy", mmap_mode="r"),
-                np.load(sealed / "y.npy", mmap_mode="r"),
-                np.load(sealed / "subject.npy"),
-            )
+        if self.mode == "full":
+            require_prepared("emg", "pose", self._sealed_dir(),
+                             self._sealed_overrides())
+            test_sets["private"] = self._load_sealed()
         test_sets = {
             name: make_loader(ds, batch_size=self.batch_size, device=device,
                               num_workers=self.num_workers)
@@ -165,3 +225,20 @@ class Dataset(BaseDataset):
         }
         return dict(train_set=datasets["train"], test_sets=test_sets,
                     device=device, num_workers=self.num_workers, **meta)
+
+    def _sealed_overrides(self):
+        cache = str(self._sealed_dir() / "cache")
+        return {
+            "study.source.name": Emg2poseSealed2026.__name__,
+            "target.infra.cluster": None,
+            "target.infra.folder": cache,
+            "target.infra.permissions": None,
+            "study.source.timelines.infra.backend": "Cached",
+            "study.source.timelines.infra.folder": cache,
+        }
+
+    def _load_sealed(self):
+        datasets, _ = load_task("emg", "pose", data_dir=self._sealed_dir(),
+                                seed=self.get_seed(),
+                                overrides=self._sealed_overrides())
+        return datasets["test"]

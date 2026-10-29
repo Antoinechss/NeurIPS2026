@@ -28,8 +28,9 @@ benchopt run benchmark -d Simulated -s solution/submission.py -s Ridge
 
 Real data (large download, prefer a compute node):
 `BENCHOPT_DATA_HOME=<data> benchopt prepare benchmark -d EMG2Pose`. The
-private test set is staged on the worker only, in `<data>/emg2pose_sealed/`
-(`X.npy`, `y.npy`, `subject.npy`); without it, a run scores the public set
-only.
+private test set, a sealed cohort of new users, exists on the worker only:
+the phase runs `EMG2Pose[mode=full]`, whose prepare reads the cohort's zip
+from `<data>/emg2pose_sealed_raw/`. Locally, the default `mode=public`
+scores the public set only.
 
 Build the Codabench bundle with `python tools/create_bundle.py`.

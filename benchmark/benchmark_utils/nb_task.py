@@ -121,7 +121,7 @@ def download_study(modality, task, data_dir, overrides=None):
     ns.Study(**study).download(overwrite=True)
 
 
-def require_prepared(modality, task, data_dir):
+def require_prepared(modality, task, data_dir, overrides=None):
     """Fail with a clear message when the study data is not prepared.
 
     A no-op on a read-only staged mount, prepared by construction.
@@ -129,7 +129,7 @@ def require_prepared(modality, task, data_dir):
     if not os.access(data_dir, os.W_OK):
         return
 
-    cfg = _task_data_config(modality, task, data_dir, None)
+    cfg = _task_data_config(modality, task, data_dir, overrides)
     study = dict(cfg["study"]["source"])
     if not (Path(study["path"]) / study["name"]).exists():
         raise SystemExit(
