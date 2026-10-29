@@ -19,7 +19,7 @@ and the **Timeline** page gives the dates.
 
 This challenge is adapted from **Track 04 (EMG-to-Pose)** of the
 [NeurIPS 2026 neural interfaces competition](https://www.codabench.org/competitions/17984/).
-Its sealed final phase, from **5 to 21 November 2026**, ranks models on a
+Its sealed final phase, from **5 to 14 November 2026**, ranks models on a
 private cohort of new users recorded by Meta Reality Labs. If you want to see
 how your model does there, you are welcome to submit it: follow the
 **Registration Guide** and **Submission Guide** of
