@@ -80,7 +80,7 @@ leaderboards:
         key: r2
         index: 2
         sorting: desc
-      # The private columns stay empty until the sealed cohort is staged.
+      # Private columns: the sealed cohort, hidden for the whole challenge.
       - title: Angular MAE, deg (private)
         key: angular_mae_private
         index: 3
