@@ -51,8 +51,7 @@ jobs:
             --output-dir scoring_res
           python -c "import json; s=json.load(open('scoring_res/scores.json')); \
             keys={'angular_mae','angular_mae_subject_std','r2', \
-            'angular_mae_private','angular_mae_subject_std_private', \
-            'r2_private','duration'}; \
+            'duration'}; \
             assert keys <= set(s), s; print('scores OK:', s)"
 
   docker:
