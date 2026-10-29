@@ -75,6 +75,15 @@ retrain the top-ranked submissions from their `submission.py` (see the
 terms). Keep all the training in `fit`, and write at the top of the file the
 `n_train_subjects` you used and how long training took on which GPU.
 
+## The compute
+
+Each submission runs on its own AWS g4dn.2xlarge machine: one NVIDIA T4 GPU
+(16 GB), 8 vCPUs and 32 GB of RAM, in the competition's Docker image
+(`tommoral/emg2pose-compet:v1`, CUDA 12.6). The platform only evaluates your
+trained model, and this must fit in **1 hour**, or the submission fails. The
+three Datacamp challenges share these machines, so a submission may wait in
+the queue at busy times.
+
 ## Run it locally, same code as the server
 
 ```bash
