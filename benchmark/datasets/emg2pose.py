@@ -71,10 +71,10 @@ class Emg2poseSealed2026(Salter2024Emg2pose):
     aliases: tp.ClassVar[tuple[str, ...]] = ()
     description: tp.ClassVar[str] = (
         "The sealed 2026 emg2pose cohort, staged on the worker.")
-    # The study checks the BIDS tree holds this many recordings: the 267 of
+    # The study checks the BIDS tree holds this many recordings: the 2887 of
     # the cohort, plus the two copies below.
     _info: tp.ClassVar = Salter2024Emg2pose._info.model_copy(
-        update=dict(num_timelines=269, num_subjects=6))
+        update=dict(num_timelines=2889, num_subjects=57))
 
     def _download(self, overwrite=False):
         raise FileNotFoundError(
