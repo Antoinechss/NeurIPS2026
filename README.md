@@ -26,11 +26,23 @@ pip install -r requirements.txt
 benchopt run benchmark -d Simulated -s solution/submission.py -s Ridge
 ```
 
-Real data (large download, prefer a compute node):
-`BENCHOPT_DATA_HOME=<data> benchopt prepare benchmark -d EMG2Pose`. The
-private test set, a sealed cohort of new users, exists on the worker only:
-the phase runs `EMG2Pose[mode=full]`, whose prepare reads the cohort's zip
-from `<data>/emg2pose_sealed_raw/`. Locally, the default `mode=public`
-scores the public set only.
+## Get the data
 
-Build the Codabench bundle with `python tools/create_bundle.py`.
+The public data comes from the emg2pose corpus on NEMAR. One command
+downloads the public test set and all 158 training users, about 340 GB
+(prefer a compute node with many cores):
+
+```bash
+benchopt prepare benchmark -d "EMG2Pose[n_train_subjects=158]"
+```
+
+The default `EMG2Pose` takes the first 8 training users only. The data goes
+to `benchmark/data/`, or to `$BENCHOPT_DATA_HOME`. The private test set, a
+sealed cohort of new users, exists on the worker only: the phase runs
+`EMG2Pose[mode=full]`, whose prepare reads the cohort's zip from
+`<data>/emg2pose_sealed_raw/`. Locally, the default `mode=public` scores the
+public set only.
+
+## Build the Codabench bundle
+
+Run `python tools/create_bundle.py`.

@@ -84,12 +84,27 @@ trained model, and this must fit in **1 hour**, or the submission fails. The
 three Datacamp challenges share these machines, so a submission may wait in
 the queue at busy times.
 
-## Run it locally, same code as the server
+## Get the data
+
+The public data comes from the emg2pose corpus on NEMAR. One command
+downloads the public test set and all 158 training users, about 340 GB:
 
 ```bash
 pip install -r requirements.txt
+benchopt prepare benchmark -d "EMG2Pose[n_train_subjects=158]"
+```
+
+The default `EMG2Pose` takes the first 8 training users only, a much
+smaller download. Run with the `n_train_subjects` you prepared. The download
+opens one connection per CPU, so prepare on a machine with many cores. The
+data goes to `benchmark/data/`, or to the folder `BENCHOPT_DATA_HOME` names.
+The private test set is not public: it stays on the platform.
+
+## Run it locally, same code as the server
+
+```bash
 benchopt run benchmark -d Simulated -s solution/submission.py   # smoke test
-benchopt prepare benchmark -d "EMG2Pose[n_train_subjects=8]"    # large download
+benchopt prepare benchmark -d "EMG2Pose[n_train_subjects=8]"
 # train, score, and write the submission
 benchopt run benchmark -d "EMG2Pose[n_train_subjects=8]" -s solution/submission.py
 # evaluate it exactly as the server does: load the weights, no training
