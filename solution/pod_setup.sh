@@ -18,6 +18,9 @@ cat > "$W/env.sh" <<'EOF'
 export UV_PYTHON_INSTALL_DIR=/workspace/uv-python
 export UV_CACHE_DIR=/workspace/.uv-cache
 export BENCHOPT_DATA_HOME=/workspace/data
+# Same as the organisers' Docker image: parallel extraction corrupts the
+# data index on many-core machines.
+export NEURALBENCH_EXTRACT_CPUS=1
 export PATH="/workspace/bin:$PATH"
 [ -f /workspace/venv/bin/activate ] && . /workspace/venv/bin/activate
 cd /workspace/codabench
