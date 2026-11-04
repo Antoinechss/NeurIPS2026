@@ -21,11 +21,21 @@ export BENCHOPT_DATA_HOME=/workspace/data
 # Same as the organisers' Docker image: parallel extraction corrupts the
 # data index on many-core machines.
 export NEURALBENCH_EXTRACT_CPUS=1
+# neuralbench's settings file (else it prompts for paths): the organisers'
+# tools/neuralbench_config.json, with its folders moved onto the volume.
+export NEURALBENCH_CONFIG=/workspace/neuralbench_config.json
 export PATH="/workspace/bin:$PATH"
 [ -f /workspace/venv/bin/activate ] && . /workspace/venv/bin/activate
 cd /workspace/codabench
 EOF
 . "$W/env.sh"
+python3 - <<'PY'
+import json
+cfg = json.load(open("/workspace/codabench/tools/neuralbench_config.json"))
+for key in ("CACHE_DIR", "SAVE_DIR", "DATA_DIR"):
+    cfg[key] = cfg[key].replace("/tmp/neuralbench", "/workspace/neuralbench")
+json.dump(cfg, open("/workspace/neuralbench_config.json", "w"), indent=2)
+PY
 
 # uv: fast installer that also downloads Python 3.12 (neuralset needs >= 3.12).
 if ! command -v uv >/dev/null; then
