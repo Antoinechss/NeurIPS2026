@@ -35,10 +35,14 @@ fi
 [ -d "$W/venv" ] || uv venv -p 3.12 "$W/venv"
 . "$W/venv/bin/activate"
 
-# CUDA 12.6 build of torch, like the evaluation Docker image. torchaudio is
-# required by braindecode and must come from the same index as torch.
-uv pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+# CUDA 12.6 build of torch, like the evaluation Docker image. torchaudio
+# (braindecode) and torchvision (torchmetrics) must come from the same index
+# as torch: PyPI builds of them fail to load ("torchvision::nms does not exist").
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 uv pip install -r requirements.txt
+TORCH=$(python -c "import torch; print(torch.__version__.split('+')[0])")
+uv pip install --reinstall-package torchvision --reinstall-package torchaudio \
+    "torch==$TORCH" torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 
-python -c "import torch, braindecode, neuralset; print('torch', torch.__version__, '| CUDA available:', torch.cuda.is_available())"
+python -c "import torch, torchvision.ops, braindecode, neuralset, neuraltrain; print('torch', torch.__version__, '| CUDA available:', torch.cuda.is_available())"
 echo "Setup OK. In every new terminal: source /workspace/env.sh"
