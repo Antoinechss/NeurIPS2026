@@ -5,20 +5,16 @@ Antoine (M2 Data Science, IP Paris) is competing in **EMG-to-Pose**. The goal is
 ## 1. The task in one paragraph
 A wristband records **16 channels of surface EMG** (forearm muscle electrical activity) at **2 kHz**. From a **5-second window** (16 × 10 000 samples), predict the trajectories of the **20 hand joint angles** over the same window, in **radians**. The data comes from the public emg2pose corpus (Salter et al., 2024, Meta).
 
-## 2. Two competitions, same code
-| | Datacamp 2026 (course) | NeurIPS 2026 Track 04 |
-|---|---|---|
-| Where | Codabench "Datacamp 2026 – EMG2Pose" | codabench.org/competitions/17984 |
-| Stakes | course grade (M2) | ranking, $20k pool, internships |
-| Dates | 29 Oct 2026 → 1 Feb 2027 | registration closes **5 Nov 23:59 Paris**; sealed phase **5 → 21 Nov** |
-| Contract | this repo (below) | "close to this one", **check its Submission Guide before uploading** |
+## 2. The competition
+Codabench "Datacamp 2026 – EMG2Pose" (course grade, M2), **29 Oct 2026 → 1 Feb 2027**. Contract: this repo (below).
+Antoine is **not** entering NeurIPS 2026 Track 04 (same data, separate competition): ignore its deadlines and never suggest registering.
 
 ## 3. Scoring
 - **Metric: mean angular MAE in degrees**, lower is better. It is averaged over joints, time steps and windows. Steps with a NaN label are ignored. The per-subject MAE std and R² are also shown.
 - **Public column**: held-out movement stages of 20 users who are absent from training. The local score on the public split **equals** the leaderboard number, so evaluate locally and save submissions.
 - **Private column (final ranking)**: a sealed cohort of **57 new users** (2 887 recordings). The real problem is **cross-user generalization** (anatomy, band placement). Do not overfit the public column.
 
-## 4. Submission contract (Datacamp; verify for NeurIPS)
+## 4. Submission contract
 - A zip containing `submission.py` and its weight files. **All code lives in `submission.py`**: no importing sibling `.py` files.
 - `class Solver(CompetSolver)` implements `load_model(meta)`, `fit(model, train_set)`, `save_model(model, path)`.
 - `model.predict(X)`: `X` is `(B, 16, T)` float, and the output is `(B, 20, T')` in radians. A coarser `T'` is nearest-resampled. Windows are independent, so keep no state between calls.
@@ -73,7 +69,7 @@ Each stage has a **concept** (explain it to Antoine first) and an **experiment**
 | 5. Inference tricks | Test-time augmentation (average over rotations), seed ensembles | `tta=True/False` (re-eval only), `n_models=2` |
 | 6. Advanced (pick by evidence) | per-user normalisation-free features, wider/longer models, multi-resolution input, loss on velocities, SWA, distillation of an ensemble into one model | one at a time, only if stages 2–5 have converged |
 
-Stop and discuss with Antoine before stage 6 and before any final NeurIPS submission.
+Stop and discuss with Antoine before stage 6 and before any final submission.
 
 ## 9. Working rules for the agent
 - **One change per experiment.** Same seed and same `n_train_subjects` within a comparison. Record in `EXPERIMENTS.md`: date, file + params, n_train_subjects, GPU, train time, public MAE, subject std, inference time, one-line takeaway.

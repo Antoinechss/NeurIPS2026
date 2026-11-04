@@ -7,8 +7,11 @@
 - Python 3.12 (neuralset requires >= 3.12)
 
 ## 1. Setup
+The code lives in `codabench_emg2pose`, branch `feat/vemg2pose-plus`, pushed to the remote `mine`
+(github.com/Antoinechss/NeurIPS2026; its `main` holds unrelated Meta code, so always clone the branch).
+Keep that repo **private**: it holds our competition solution.
 ```bash
-git clone https://github.com/Antoinechss/NeurIPS2026.git && cd NeurIPS2026
+git clone -b feat/vemg2pose-plus https://github.com/Antoinechss/NeurIPS2026.git codabench && cd codabench
 python3.12 -m venv .venv && . .venv/bin/activate
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
