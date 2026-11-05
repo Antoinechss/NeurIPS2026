@@ -2,8 +2,9 @@
 
 Training record (fill in after the final run):
     n_train_subjects = 158
-    training time    = TODO h on TODO GPU
-    command          = benchopt run benchmark -d "EMG2Pose[n_train_subjects=158,num_workers=16]" \
+    training time    = TODO h on 1x RTX 6000 Ada 48 GB (RunPod), + ~25 min data loading
+    calibration      = ~128 steps/min on that GPU, same speed at 8 and 158 users
+    command          = benchopt run benchmark -d "EMG2Pose[n_train_subjects=158,num_workers=12]" \
                            -s solution/vemg2pose_plus.py
 
 Changes vs. the VEMG2Pose baseline (same braindecode backbone, same left-context padding):
@@ -183,7 +184,7 @@ class Solver(CompetSolver):
 
     parameters = {
         "n_models": [1],
-        "max_steps": [60000],
+        "max_steps": [25000],  # ~3.3 h at ~128 steps/min on an RTX 6000 Ada
         "batch_size": [256],
         "lr": [1e-3],
         "weight_decay": [1e-2],
