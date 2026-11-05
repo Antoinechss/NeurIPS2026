@@ -1,8 +1,9 @@
 """VEMG2Pose+ : VEMG2Pose trained for cross-user generalization.
 
-Training record (fill in after the final run):
+Training record:
     n_train_subjects = 158
-    training time    = TODO h on 1x RTX 6000 Ada 48 GB (RunPod), + ~25 min data loading
+    training time    = 3.2 h (191.6 min, 25 000 steps) on 1x RTX 6000 Ada 48 GB (RunPod),
+                       + ~25 min data loading; V100 estimate ~7-10 h
     calibration      = ~128 steps/min on that GPU, same speed at 8 and 158 users
     command          = benchopt run benchmark -d "EMG2Pose[n_train_subjects=158,num_workers=12]" \
                            -s solution/vemg2pose_plus.py
