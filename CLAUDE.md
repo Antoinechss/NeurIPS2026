@@ -38,7 +38,8 @@ Antoine is **not** entering NeurIPS 2026 Track 04 (same data, separate competiti
 | `benchmark/benchmark_utils/base_solver.py` | `CompetSolver` contract and export |
 | `benchmark/solvers/` | baselines: `mean_pose`, `ridge_pose`, `torch_linear`, `eegnet_pose`, `vemg2pose` |
 | `solution/submission.py` | organisers' sample (small CNN) |
-| `solution/vemg2pose_plus.py` | our current best candidate (see §8) |
+| `solution/vemg2pose_plus.py` | causal candidate: 15.98° public (25k steps, 158 users), submitted |
+| `solution/posebinet.py` | bidirectional candidate (offline decoding), under test |
 | `solution/RUNBOOK.md` | GPU rental, data, calibration and submit commands |
 | `EXPERIMENTS.md` | experiment log (create it if missing) |
 
@@ -81,5 +82,5 @@ Stop and discuss with Antoine before stage 6 and before any final submission.
 - Commits: small and descriptive, on a feature branch, not `main`.
 
 ## 10. Status
-- Candidate: `solution/vemg2pose_plus.py` (VEMG2Pose + rotation/gain/noise aug, AdamW + cosine, EMA, AMP encoder, rotation TTA, optional ensemble). It passes the Simulated smoke test and the save/load re-eval. **Not yet run on real data.** `max_steps=60000` is a placeholder until it is calibrated on the rented GPU.
-- Next: rent the GPU (see RUNBOOK), then stages 0–2.
+- `vemg2pose_plus` (25k steps, 158 users, 3.2 h on an RTX 6000 Ada): **15.98° public**, re-eval identical. This matches the published VEMG2Pose result for held-out users and stages (15.6–15.8°). The best published number for that setting is 14.6° (arXiv 2603.08212, multi-task tracking + regression). Leaderboard entries at 4–6° are far below anything published, even below models given the true starting pose (~10°), so do not chase them.
+- `posebinet`: the VEMG2Pose encoder with its receptive field centred, plus a bidirectional LSTM and an absolute-angle read-out. It uses the EMG after t, which the offline scoring allows. Passes the Simulated smoke test and the save/load re-eval. Next: a 3000-step screen against 2a (17.109), then the full run.
