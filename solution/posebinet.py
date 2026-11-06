@@ -18,7 +18,12 @@ causal, built for streaming: they only look at the past. This model looks both w
   integration, hence no drift. The read-out starts from the median training pose.
 - Training recipe of vemg2pose_plus: band rotation / gain / noise augmentation, AdamW (no
   decay on biases and norms), warmup + cosine, grad clipping, EMA weights, fp16 encoder,
-  test-time averaging over band rotations, optional seed ensemble.
+  test-time averaging over band rotations.
+- Ensemble of `n_models` members trained side by side: every loaded batch feeds each
+  member (own initial weights, augmentation, optimizer, EMA), and their predictions are
+  averaged. Loading the data is the bottleneck (one member waited for it ~57% of the
+  time), so the second member costs little extra time. With the L1 metric, the average
+  of two models is never worse than the mean error of the two.
 The log reports the share of time spent waiting for data: if it is high, the data loader,
 not the GPU, sets the speed.
 
@@ -134,34 +139,44 @@ def pose_loss(pred, y, vel_weight, lag):
     return loss
 
 
-def train_member(model, loader, *, seed, lr, weight_decay, max_steps, warmup_steps,
-                 ema_decay, max_hours, vel_weight, lag, reuse, aug):
+def train_members(members, loader, *, seed, lr, weight_decay, max_steps, warmup_steps,
+                  ema_decay, max_hours, vel_weight, lag, reuse, aug):
+    """Train the members side by side: each batch is loaded once and used by every
+    member, each with its own initial weights, augmentation, optimizer and EMA.
+    Loading is the bottleneck (one member waited for data ~57% of the time), so
+    a second member uses GPU time that would otherwise sit idle."""
     torch.manual_seed(seed)
-    dev = next(model.parameters()).device
+    dev = next(members[0].parameters()).device
     cuda = dev.type == "cuda"
-    g = torch.Generator(device=dev).manual_seed(seed + 1)
 
-    # Start the read-out at the median pose of one batch (L1-optimal constant).
+    # Start every read-out at the median pose of one batch (L1-optimal constant).
     _, y0, _ = next(iter(loader))
     with torch.no_grad():
         y0 = y0.transpose(0, 1).reshape(y0.shape[1], -1)
-        model.head.bias.copy_(torch.nanmedian(y0, dim=1).values)
+        median = torch.nanmedian(y0, dim=1).values
+        for model in members:
+            model.head.bias.copy_(median)
     del y0
 
-    ema = copy.deepcopy(model).eval()
-    for p in ema.parameters():
-        p.requires_grad_(False)
-    params = list(model.parameters())
-    ema_params = list(ema.parameters())
-    # Weight decay on weight matrices and kernels only, not on biases and norms.
-    opt = torch.optim.AdamW(
-        [{"params": [p for p in params if p.ndim >= 2],
-          "weight_decay": weight_decay},
-         {"params": [p for p in params if p.ndim < 2], "weight_decay": 0.0}],
-        lr=lr)
-    scaler = torch.amp.GradScaler("cuda", enabled=cuda)
-    if cuda:  # compile the convolutional encoder only
-        model.encoder = torch.compile(model.encoder)
+    runs = []
+    for i, model in enumerate(members):
+        ema = copy.deepcopy(model).eval()
+        for p in ema.parameters():
+            p.requires_grad_(False)
+        params = list(model.parameters())
+        # Weight decay on weight matrices and kernels only, not on biases and norms.
+        opt = torch.optim.AdamW(
+            [{"params": [p for p in params if p.ndim >= 2],
+              "weight_decay": weight_decay},
+             {"params": [p for p in params if p.ndim < 2], "weight_decay": 0.0}],
+            lr=lr)
+        if cuda:  # compile the convolutional encoder only
+            model.encoder = torch.compile(model.encoder)
+        model.train()
+        runs.append(dict(
+            model=model, ema=ema, params=params, ema_params=list(ema.parameters()),
+            opt=opt, scaler=torch.amp.GradScaler("cuda", enabled=cuda),
+            g=torch.Generator(device=dev).manual_seed(seed + 1000 * i + 1)))
 
     def lr_at(step):
         if step < warmup_steps:
@@ -169,12 +184,16 @@ def train_member(model, loader, *, seed, lr, weight_decay, max_steps, warmup_ste
         t = (step - warmup_steps) / max(1, max_steps - warmup_steps)
         return lr * 0.5 * (1 + math.cos(math.pi * min(t, 1.0)))
 
+    def losses(totals, n):  # mean training L1 of each member, in rad and degrees
+        l1 = [float(t) / max(n, 1) for t in totals]
+        return (" / ".join(f"{v:.4f}" for v in l1) + " ("
+                + " / ".join(f"{math.degrees(v):.1f}" for v in l1) + " deg)")
+
     start = time.time()
     deadline = start + 3600 * max_hours if max_hours else None
     step, epoch, waited = 0, 0, 0.0
-    model.train()
     while step < max_steps:
-        total, n = 0.0, 0
+        totals, n = [0.0] * len(runs), 0
         batches = iter(loader)
         while step < max_steps:
             t0 = time.time()
@@ -184,42 +203,45 @@ def train_member(model, loader, *, seed, lr, weight_decay, max_steps, warmup_ste
                 break
             waited += time.time() - t0
             for _ in range(reuse):  # extra steps on the same batch, new augmentation
-                for group in opt.param_groups:
-                    group["lr"] = lr_at(step)
-                loss = pose_loss(model(augment(X, g, **aug)), y, vel_weight, lag)
-                opt.zero_grad(set_to_none=True)
-                scaler.scale(loss).backward()
-                scaler.unscale_(opt)
-                nn.utils.clip_grad_norm_(params, 1.0)
-                scaler.step(opt)
-                scaler.update()
-                with torch.no_grad():
-                    d = min(ema_decay, (1 + step) / (10 + step))
-                    torch._foreach_lerp_(ema_params, [p.detach() for p in params],
-                                         1 - d)
-                total, n, step = total + loss.detach(), n + 1, step + 1
+                for k, r in enumerate(runs):
+                    for group in r["opt"].param_groups:
+                        group["lr"] = lr_at(step)
+                    loss = pose_loss(r["model"](augment(X, r["g"], **aug)), y,
+                                     vel_weight, lag)
+                    r["opt"].zero_grad(set_to_none=True)
+                    r["scaler"].scale(loss).backward()
+                    r["scaler"].unscale_(r["opt"])
+                    nn.utils.clip_grad_norm_(r["params"], 1.0)
+                    r["scaler"].step(r["opt"])
+                    r["scaler"].update()
+                    with torch.no_grad():
+                        d = min(ema_decay, (1 + step) / (10 + step))
+                        torch._foreach_lerp_(r["ema_params"],
+                                             [p.detach() for p in r["params"]], 1 - d)
+                    totals[k] = totals[k] + loss.detach()
+                n, step = n + 1, step + 1
                 if step % 500 == 0:
                     elapsed = time.time() - start
-                    l1 = float(total) / n
-                    print(f"[seed {seed}] step {step}/{max_steps} lr {lr_at(step):.2e} "
-                          f"loss {l1:.4f} ({math.degrees(l1):.1f} deg) "
-                          f"{elapsed / 60:.1f} min, waiting for data "
-                          f"{100 * waited / elapsed:.0f}%", flush=True)
+                    print(f"step {step}/{max_steps} lr {lr_at(step):.2e} "
+                          f"loss {losses(totals, n)} {elapsed / 60:.1f} min, "
+                          f"waiting for data {100 * waited / elapsed:.0f}%", flush=True)
                 if step >= max_steps:
                     break
             if deadline and time.time() > deadline:
                 break
         epoch += 1
-        print(f"[seed {seed}] epoch {epoch} done, step {step}, "
-              f"loss {float(total) / max(n, 1):.4f}, "
+        print(f"epoch {epoch} done, step {step}, loss {losses(totals, n)}, "
               f"{(time.time() - start) / 60:.1f} min", flush=True)
         if deadline and time.time() > deadline:
-            print(f"[seed {seed}] stopped by the {max_hours} h budget", flush=True)
+            print(f"stopped by the {max_hours} h budget", flush=True)
             break
-    for b_ema, b in zip(ema.buffers(), model.buffers()):
-        b_ema.copy_(b)
-    ema.lstm.flatten_parameters()
-    return ema
+    emas = []
+    for r in runs:
+        for b_ema, b in zip(r["ema"].buffers(), r["model"].buffers()):
+            b_ema.copy_(b)
+        r["ema"].lstm.flatten_parameters()
+        emas.append(r["ema"])
+    return emas
 
 
 class Solver(CompetSolver):
@@ -229,8 +251,8 @@ class Solver(CompetSolver):
     requirements = ["pip::braindecode"]
 
     parameters = {
-        "n_models": [1],
-        "max_steps": [25000],  # placeholder, calibrated on the rented GPU
+        "n_models": [2],  # members trained side by side, averaged at test time
+        "max_steps": [25000],  # ~2.7 h at ~155 batches/min (data-bound) on an RTX 6000 Ada
         "batch_size": [256],
         "lr": [1e-3],
         "weight_decay": [1e-2],
@@ -245,6 +267,7 @@ class Solver(CompetSolver):
         "tta": [True],
         "max_hours": [11.0],  # hard stop for the organisers' 12 h V100 retrain
         "seed": [0],
+        "member": [-1],  # -1: average all members; i: re-evaluate member i alone
     }
 
     def _build(self, meta):
@@ -264,6 +287,8 @@ class Solver(CompetSolver):
         model = Ensemble([self._build(meta) for _ in range(n_models)], shifts)
         if state is not None:
             model.load_state_dict(state["state_dict"])
+            if self.member >= 0:  # score one member alone (re-evaluation only)
+                model.members = model.members[self.member:self.member + 1]
         model = model.to(meta["device"])
         for m in model.members:
             m.lstm.flatten_parameters()
@@ -271,17 +296,13 @@ class Solver(CompetSolver):
 
     def fit(self, model, train_set):
         loader = self.make_loader(train_set, batch_size=self.batch_size)
-        hours_each = self.max_hours / len(model.members)
         lag = max(1, round(0.02 * self.meta["sfreq"]))  # speed over 20 ms
-        trained = []
-        for i, member in enumerate(model.members):
-            trained.append(train_member(
-                member, loader, seed=self.seed + 1000 * i, lr=self.lr,
-                weight_decay=self.weight_decay, max_steps=self.max_steps,
-                warmup_steps=self.warmup_steps, ema_decay=self.ema_decay,
-                max_hours=hours_each, vel_weight=self.vel_weight, lag=lag,
-                reuse=self.reuse, aug=dict(max_shift=self.max_shift)))
-        model.members = nn.ModuleList(trained)
+        model.members = nn.ModuleList(train_members(
+            list(model.members), loader, seed=self.seed, lr=self.lr,
+            weight_decay=self.weight_decay, max_steps=self.max_steps,
+            warmup_steps=self.warmup_steps, ema_decay=self.ema_decay,
+            max_hours=self.max_hours, vel_weight=self.vel_weight, lag=lag,
+            reuse=self.reuse, aug=dict(max_shift=self.max_shift)))
 
     def save_model(self, model, path):
         torch.save({"n_models": len(model.members),
